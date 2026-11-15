@@ -1840,6 +1840,33 @@
         statusEl.textContent = 'Câmera não autorizada. Use "🖼️ Foto" ou digite os números abaixo.';
         btnEl.innerHTML = '<span>📷</span> Ler Código / QR Code';
         isScannerRunning = false;
+        isScanCooldown = false;
+        readerEl.innerHTML = '';
+        readerEl.classList.add('hidden');
+      }
+    }
+
+    function stopScanner() {
+      const readerEl = document.getElementById('qr-reader');
+      const statusEl = document.getElementById('scanner-status');
+      const btnEl = document.getElementById('btn-toggle-scanner');
+
+      if (scanLoopTimer) {
+        clearInterval(scanLoopTimer);
+        scanLoopTimer = null;
+      }
+
+      if (activeMediaStream) {
+        activeMediaStream.getTracks().forEach(track => track.stop());
+        activeMediaStream = null;
+      }
+
+      if (zxingReader) {
+        try { zxingReader.reset(); } catch (e) {}
+        zxingReader = null;
+      }
+
+      isScannerRunning = false;
       isScanCooldown = false;
       readerEl.innerHTML = '';
       readerEl.classList.add('hidden');
@@ -1847,7 +1874,12 @@
       btnEl.innerHTML = '<span>📷</span> Ler Código / QR Code';
     }
 
-    async function handleScannedCode(code, autoRegister = false) {
+    async function handleScannedCode(code, autoRegister = null) {
+      if (autoRegister === null) {
+        const chk = document.getElementById('chk-continuous-scan');
+        autoRegister = chk ? chk.checked : false;
+      }
+
       let extractedAmountCents = 0;
       let extractedDesc = '';
       let detectedCategory = null;
@@ -1912,7 +1944,6 @@
       else if (/^\d{8,24}$/.test(cleanDigits)) {
         extractedDesc = `Produto Cód. ${cleanDigits}`;
         detectedCategory = detectedCategory || 'Mercado';
-        // Busca o nome real do produto antes de salvar, se possível
         const onlineName = await fetchProductNameOnline(cleanDigits);
         if (onlineName) {
           extractedDesc = onlineName;
@@ -1950,7 +1981,7 @@
 
       playBeepSound();
 
-      // Se o modo contínuo estiver ativo e o código trouxe o valor (ex: etiquetas de balança, PIX, boleto, QR com valor)
+      // Se o modo contínuo estiver ativo e o código trouxe o valor, grava direto na tabela de gastos
       const currentInputValCents = parseCurrencyToCents(document.getElementById('input-expense-amount').value);
       const finalAmountCents = extractedAmountCents > 0 ? extractedAmountCents : currentInputValCents;
 
@@ -1976,13 +2007,12 @@
         counterEl.classList.remove('hidden');
         counterEl.textContent = `${continuousScanCount} ${continuousScanCount === 1 ? 'item salvo' : 'itens salvos'}`;
 
-        // Limpa os campos de valor/descrição para o próximo produto diferente
+        // Limpa os campos para o próximo item
         document.getElementById('input-expense-amount').value = '';
         document.getElementById('input-expense-desc').value = '';
 
         showToast(`✓ +1 registrado: ${finalDesc} (${formatCurrency(finalAmountCents)})`);
       } else if (autoRegister && finalAmountCents === 0) {
-        // Código comercial sem preço embutido (ex: EAN-13 comum) -> pausa para digitar o valor e clicar em Registrar
         stopScanner();
         document.getElementById('input-expense-amount').focus();
         showToast('✓ Produto identificado! Digite o valor para salvar.');
@@ -2005,151 +2035,6 @@
         }
       } catch (e) {}
       return null;
-    }
-    }
-
-    function stopScanner() {
-      const readerEl = document.getElementById('qr-reader');
-      const statusEl = document.getElementById('scanner-status');
-      const btnEl = document.getElementById('btn-toggle-scanner');
-
-      if (scanLoopTimer) {
-        clearInterval(scanLoopTimer);
-        scanLoopTimer = null;
-      }
-
-      if (activeMediaStream) {
-        activeMediaStream.getTracks().forEach(track => track.stop());
-        activeMediaStream = null;
-      }
-
-      if (zxingReader) {
-        try { zxingReader.reset(); } catch (e) {}
-        zxingReader = null;
-      }
-
-      isScannerRunning = false;
-      readerEl.innerHTML = '';
-      readerEl.classList.add('hidden');
-      statusEl.classList.add('hidden');
-      btnEl.innerHTML = '<span>📷</span> Ler Código / QR Code';
-    }
-
-    function handleScannedCode(code) {
-      let extractedAmountCents = 0;
-      let extractedDesc = '';
-      let detectedCategory = null;
-      const cleanDigits = code.replace(/\D/g, '');
-
-      // 1. Verificar se é QR Code de Nota Fiscal (NFC-e / URL SEFAZ)
-      if (code.includes('http') && (code.includes('nfce') || code.includes('fazenda') || code.includes('sefaz') || code.includes('p='))) {
-        extractedDesc = 'Compra via NFC-e (Cupom Fiscal)';
-        detectedCategory = 'Mercado';
-        const valMatch = code.match(/[?&|](?:vNF|valor|v)=([\d.,]+)/i);
-        if (valMatch && valMatch[1]) {
-          extractedAmountCents = parseCurrencyToCents(valMatch[1].replace('.', ','));
-        }
-      }
-      // 2. Verificar se é QR Code PIX (EMVCo BR Code)
-      else if (code.startsWith('000201')) {
-        const pixAmountMatch = code.match(/54(\d{2})(\d+\.\d{2})/);
-        if (pixAmountMatch) {
-          const len = parseInt(pixAmountMatch[1], 10);
-          const valStr = pixAmountMatch[2].substring(0, len);
-          extractedAmountCents = Math.round(parseFloat(valStr) * 100);
-        }
-        const pixMerchantMatch = code.match(/59(\d{2})([^\d]{2,25})/);
-        if (pixMerchantMatch) {
-          const len = parseInt(pixMerchantMatch[1], 10);
-          extractedDesc = 'PIX: ' + code.substring(code.indexOf(pixMerchantMatch[0]) + 4, code.indexOf(pixMerchantMatch[0]) + 4 + len).trim();
-        } else {
-          extractedDesc = 'Pagamento via QR Code PIX';
-        }
-      }
-      // 3. Verificar se é Código de Barras de Boleto Bancário (44 a 48 dígitos)
-      else if (/^\d{44,48}$/.test(cleanDigits)) {
-        const boletoValStr = cleanDigits.length === 44 ? cleanDigits.substring(9, 19) : cleanDigits.substring(37, 47);
-        const valCents = parseInt(boletoValStr, 10);
-        if (!isNaN(valCents) && valCents > 0) {
-          extractedAmountCents = valCents;
-        }
-        extractedDesc = 'Boleto Bancário';
-        detectedCategory = 'Contas';
-      }
-      // 4. Etiqueta de Balança de Supermercado (20 dígitos - Ex: 24653000055261811260 = R$ 5,52)
-      else if (/^2\d{19}$/.test(cleanDigits)) {
-        const itemCode = cleanDigits.substring(1, 5);
-        const priceCents = parseInt(cleanDigits.substring(5, 12), 10);
-        if (!isNaN(priceCents) && priceCents > 0) {
-          extractedAmountCents = priceCents;
-        }
-        extractedDesc = `Produto Balança (Cód. ${itemCode})`;
-        detectedCategory = 'Mercado';
-      }
-      // 5. Etiqueta de Balança Padrão EAN-13 (13 dígitos iniciados por 2)
-      else if (/^2\d{12}$/.test(cleanDigits)) {
-        const itemCode = cleanDigits.substring(1, 7);
-        const priceCents = parseInt(cleanDigits.substring(7, 12), 10);
-        if (!isNaN(priceCents) && priceCents > 0) {
-          extractedAmountCents = priceCents;
-        }
-        extractedDesc = `Produto Balança (Cód. ${itemCode})`;
-        detectedCategory = 'Mercado';
-      }
-      // 6. Código de Barras de Produto Comercial (EAN-13 / EAN-8 / UPC / Code 128)
-      else if (/^\d{8,24}$/.test(cleanDigits)) {
-        extractedDesc = `Produto Cód. ${cleanDigits}`;
-        fetchProductInfo(cleanDigits);
-      }
-      // 7. QR Code com texto livre ou JSON
-      else {
-        try {
-          const jsonObj = JSON.parse(code);
-          if (jsonObj.valor || jsonObj.amount) {
-            extractedAmountCents = parseCurrencyToCents(String(jsonObj.valor || jsonObj.amount));
-          }
-          if (jsonObj.descricao || jsonObj.description || jsonObj.nome) {
-            extractedDesc = jsonObj.descricao || jsonObj.description || jsonObj.nome;
-          }
-        } catch (e) {
-          const moneyMatch = code.match(/(?:R\$\s*)?(\d+[.,]\d{2})/);
-          if (moneyMatch) {
-            extractedAmountCents = parseCurrencyToCents(moneyMatch[1]);
-          }
-          extractedDesc = code.substring(0, 45);
-        }
-      }
-
-      // Preencher os campos do formulário automaticamente
-      if (extractedAmountCents > 0) {
-        document.getElementById('input-expense-amount').value = formatCurrency(extractedAmountCents);
-      }
-      if (extractedDesc) {
-        document.getElementById('input-expense-desc').value = extractedDesc;
-      }
-      if (detectedCategory) {
-        document.getElementById('select-expense-category').value = detectedCategory;
-      }
-
-      showToast('✓ Código lido com sucesso!');
-    }
-
-    // Busca nome do produto na base pública OpenFoodFacts se estiver online (fallback silencioso)
-    async function fetchProductInfo(barcode) {
-      if (!navigator.onLine) return;
-      try {
-        const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
-        const data = await res.json();
-        if (data && data.status === 1 && data.product && data.product.product_name) {
-          const descInput = document.getElementById('input-expense-desc');
-          if (descInput.value.includes(barcode)) {
-            descInput.value = data.product.product_name;
-            document.getElementById('select-expense-category').value = 'Mercado';
-          }
-        }
-      } catch (e) {
-        // Mantém o código preenchido localmente caso falhe ou esteja offline
-      }
     }
 
     function showToast(msg) {
