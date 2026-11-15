@@ -1000,6 +1000,15 @@
             <input type="text" id="input-manual-barcode" class="form-control" style="padding: 8px; font-size: 0.85rem;" placeholder="Ou digite os números do código...">
             <button type="button" class="btn btn-secondary" id="btn-parse-manual-code" style="flex: 0 0 75px; padding: 8px; font-size: 0.85rem;">Aplicar</button>
           </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--surface-border);">
+            <label for="chk-continuous-scan" style="display: flex; align-items: center; gap: 8px; font-size: 0.82rem; font-weight: 600; color: var(--text); cursor: pointer; margin: 0;">
+              <input type="checkbox" id="chk-continuous-scan" checked style="width: 16px; height: 16px; accent-color: var(--primary);">
+              Registro contínuo (múltiplos itens)
+            </label>
+            <span id="continuous-scan-counter" class="hidden" style="font-size: 0.78rem; font-weight: 700; color: var(--success); background: var(--success-light); padding: 3px 8px; border-radius: 12px;">
+              0 itens
+            </span>
+          </div>
         </div>
 
         <form id="form-add-expense">
@@ -1543,6 +1552,12 @@
        ========================================================================== */
     function openExpenseModal() {
       document.getElementById('input-expense-date').value = getFormattedTodayStr();
+      continuousScanCount = 0;
+      const counterEl = document.getElementById('continuous-scan-counter');
+      if (counterEl) {
+        counterEl.classList.add('hidden');
+        counterEl.textContent = '0 itens';
+      }
       document.getElementById('modal-expense').classList.add('active');
     }
 
@@ -1559,6 +1574,26 @@
     let isScannerRunning = false;
     let activeMediaStream = null;
     let scanLoopTimer = null;
+    let isScanCooldown = false;
+    let continuousScanCount = 0;
+
+    function playBeepSound() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1046.5, ctx.currentTime);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.15);
+      } catch (e) {}
+    }
 
     function createConfiguredZXingReader() {
       const hints = new Map();
@@ -1767,7 +1802,7 @@
         const frameCtx = frameCanvas.getContext('2d');
 
         scanLoopTimer = setInterval(() => {
-          if (!isScannerRunning || videoEl.readyState < 2) return;
+          if (!isScannerRunning || isScanCooldown || videoEl.readyState < 2) return;
           const vw = videoEl.videoWidth;
           const vh = videoEl.videoHeight;
           if (!vw || !vh) return;
@@ -1781,8 +1816,22 @@
 
           const found = tryDecodeCanvas(zxingReader, frameCanvas);
           if (found) {
-            handleScannedCode(found);
-            stopScanner();
+            const isContinuous = document.getElementById('chk-continuous-scan').checked;
+            handleScannedCode(found, isContinuous);
+
+            if (isContinuous) {
+              // Pausa de 1,8s entre leituras para permitir passar o mesmo produto várias vezes ou trocar de item
+              isScanCooldown = true;
+              statusEl.textContent = '✓ Registrado! Aguarde 1s para ler o próximo (ou o mesmo item)...';
+              setTimeout(() => {
+                isScanCooldown = false;
+                if (isScannerRunning) {
+                  statusEl.textContent = 'Posicione a linha vermelha sobre o próximo código';
+                }
+              }, 1800);
+            } else {
+              stopScanner();
+            }
           }
         }, 200);
 
@@ -1791,7 +1840,172 @@
         statusEl.textContent = 'Câmera não autorizada. Use "🖼️ Foto" ou digite os números abaixo.';
         btnEl.innerHTML = '<span>📷</span> Ler Código / QR Code';
         isScannerRunning = false;
+      isScanCooldown = false;
+      readerEl.innerHTML = '';
+      readerEl.classList.add('hidden');
+      statusEl.classList.add('hidden');
+      btnEl.innerHTML = '<span>📷</span> Ler Código / QR Code';
+    }
+
+    async function handleScannedCode(code, autoRegister = false) {
+      let extractedAmountCents = 0;
+      let extractedDesc = '';
+      let detectedCategory = null;
+      const cleanDigits = code.replace(/\D/g, '');
+
+      // 1. Verificar se é QR Code de Nota Fiscal (NFC-e / URL SEFAZ)
+      if (code.includes('http') && (code.includes('nfce') || code.includes('fazenda') || code.includes('sefaz') || code.includes('p='))) {
+        extractedDesc = 'Compra via NFC-e (Cupom Fiscal)';
+        detectedCategory = 'Mercado';
+        const valMatch = code.match(/[?&|](?:vNF|valor|v)=([\d.,]+)/i);
+        if (valMatch && valMatch[1]) {
+          extractedAmountCents = parseCurrencyToCents(valMatch[1].replace('.', ','));
+        }
       }
+      // 2. Verificar se é QR Code PIX (EMVCo BR Code)
+      else if (code.startsWith('000201')) {
+        const pixAmountMatch = code.match(/54(\d{2})(\d+\.\d{2})/);
+        if (pixAmountMatch) {
+          const len = parseInt(pixAmountMatch[1], 10);
+          const valStr = pixAmountMatch[2].substring(0, len);
+          extractedAmountCents = Math.round(parseFloat(valStr) * 100);
+        }
+        const pixMerchantMatch = code.match(/59(\d{2})([^\d]{2,25})/);
+        if (pixMerchantMatch) {
+          const len = parseInt(pixMerchantMatch[1], 10);
+          extractedDesc = 'PIX: ' + code.substring(code.indexOf(pixMerchantMatch[0]) + 4, code.indexOf(pixMerchantMatch[0]) + 4 + len).trim();
+        } else {
+          extractedDesc = 'Pagamento via QR Code PIX';
+        }
+      }
+      // 3. Verificar se é Código de Barras de Boleto Bancário (44 a 48 dígitos)
+      else if (/^\d{44,48}$/.test(cleanDigits)) {
+        const boletoValStr = cleanDigits.length === 44 ? cleanDigits.substring(9, 19) : cleanDigits.substring(37, 47);
+        const valCents = parseInt(boletoValStr, 10);
+        if (!isNaN(valCents) && valCents > 0) {
+          extractedAmountCents = valCents;
+        }
+        extractedDesc = 'Boleto Bancário';
+        detectedCategory = 'Contas';
+      }
+      // 4. Etiqueta de Balança de Supermercado (20 dígitos - Ex: 24653000055261811260 = R$ 5,52)
+      else if (/^2\d{19}$/.test(cleanDigits)) {
+        const itemCode = cleanDigits.substring(1, 5);
+        const priceCents = parseInt(cleanDigits.substring(5, 12), 10);
+        if (!isNaN(priceCents) && priceCents > 0) {
+          extractedAmountCents = priceCents;
+        }
+        extractedDesc = `Produto Balança (Cód. ${itemCode})`;
+        detectedCategory = 'Mercado';
+      }
+      // 5. Etiqueta de Balança Padrão EAN-13 (13 dígitos iniciados por 2)
+      else if (/^2\d{12}$/.test(cleanDigits)) {
+        const itemCode = cleanDigits.substring(1, 7);
+        const priceCents = parseInt(cleanDigits.substring(7, 12), 10);
+        if (!isNaN(priceCents) && priceCents > 0) {
+          extractedAmountCents = priceCents;
+        }
+        extractedDesc = `Produto Balança (Cód. ${itemCode})`;
+        detectedCategory = 'Mercado';
+      }
+      // 6. Código de Barras de Produto Comercial (EAN-13 / EAN-8 / UPC / Code 128)
+      else if (/^\d{8,24}$/.test(cleanDigits)) {
+        extractedDesc = `Produto Cód. ${cleanDigits}`;
+        detectedCategory = detectedCategory || 'Mercado';
+        // Busca o nome real do produto antes de salvar, se possível
+        const onlineName = await fetchProductNameOnline(cleanDigits);
+        if (onlineName) {
+          extractedDesc = onlineName;
+        }
+      }
+      // 7. QR Code com texto livre ou JSON
+      else {
+        try {
+          const jsonObj = JSON.parse(code);
+          if (jsonObj.valor || jsonObj.amount) {
+            extractedAmountCents = parseCurrencyToCents(String(jsonObj.valor || jsonObj.amount));
+          }
+          if (jsonObj.descricao || jsonObj.description || jsonObj.nome) {
+            extractedDesc = jsonObj.descricao || jsonObj.description || jsonObj.nome;
+          }
+        } catch (e) {
+          const moneyMatch = code.match(/(?:R\$\s*)?(\d+[.,]\d{2})/);
+          if (moneyMatch) {
+            extractedAmountCents = parseCurrencyToCents(moneyMatch[1]);
+          }
+          extractedDesc = code.substring(0, 45);
+        }
+      }
+
+      // Preencher os campos do formulário
+      if (extractedAmountCents > 0) {
+        document.getElementById('input-expense-amount').value = formatCurrency(extractedAmountCents);
+      }
+      if (extractedDesc) {
+        document.getElementById('input-expense-desc').value = extractedDesc;
+      }
+      if (detectedCategory) {
+        document.getElementById('select-expense-category').value = detectedCategory;
+      }
+
+      playBeepSound();
+
+      // Se o modo contínuo estiver ativo e o código trouxe o valor (ex: etiquetas de balança, PIX, boleto, QR com valor)
+      const currentInputValCents = parseCurrencyToCents(document.getElementById('input-expense-amount').value);
+      const finalAmountCents = extractedAmountCents > 0 ? extractedAmountCents : currentInputValCents;
+
+      if (autoRegister && finalAmountCents > 0) {
+        const targetDate = document.getElementById('input-expense-date').value || getFormattedTodayStr();
+        const finalCategory = detectedCategory || document.getElementById('select-expense-category').value || 'Mercado';
+        const finalDesc = extractedDesc || finalCategory;
+
+        appState.expenses.push({
+          id: Date.now().toString() + Math.random().toString(36).substring(2, 6),
+          amountCents: finalAmountCents,
+          category: finalCategory,
+          description: finalDesc,
+          date: targetDate,
+          timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+        });
+
+        saveStateToStorage();
+        renderAll();
+
+        continuousScanCount++;
+        const counterEl = document.getElementById('continuous-scan-counter');
+        counterEl.classList.remove('hidden');
+        counterEl.textContent = `${continuousScanCount} ${continuousScanCount === 1 ? 'item salvo' : 'itens salvos'}`;
+
+        // Limpa os campos de valor/descrição para o próximo produto diferente
+        document.getElementById('input-expense-amount').value = '';
+        document.getElementById('input-expense-desc').value = '';
+
+        showToast(`✓ +1 registrado: ${finalDesc} (${formatCurrency(finalAmountCents)})`);
+      } else if (autoRegister && finalAmountCents === 0) {
+        // Código comercial sem preço embutido (ex: EAN-13 comum) -> pausa para digitar o valor e clicar em Registrar
+        stopScanner();
+        document.getElementById('input-expense-amount').focus();
+        showToast('✓ Produto identificado! Digite o valor para salvar.');
+      } else {
+        showToast('✓ Código lido com sucesso!');
+      }
+    }
+
+    // Busca nome do produto na base pública OpenFoodFacts se estiver online (com timeout rápido de 1.5s)
+    async function fetchProductNameOnline(barcode) {
+      if (!navigator.onLine) return null;
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1500);
+        const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        const data = await res.json();
+        if (data && data.status === 1 && data.product && data.product.product_name) {
+          return data.product.product_name;
+        }
+      } catch (e) {}
+      return null;
+    }
     }
 
     function stopScanner() {
