@@ -1777,14 +1777,29 @@
           audio: false
         });
 
-        // Tenta ativar foco contínuo se o hardware suportar
+                // Tenta ativar foco contínuo se o hardware suportar
         const track = activeMediaStream.getVideoTracks()[0];
         if (track && track.getCapabilities) {
           const caps = track.getCapabilities();
+
           if (caps.focusMode && caps.focusMode.includes('continuous')) {
             track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
           }
+
+          // Tenta ativar zoom se suportado, para aproximar códigos longos (ex: balança)
+          if (caps.zoom) {
+            const zoomIdeal = Math.min(caps.zoom.max, (caps.zoom.max + caps.zoom.min) / 2 + 1);
+            track.applyConstraints({ advanced: [{ zoom: zoomIdeal }] }).catch(() => {});
+          }
+
+          // Tenta ativar lanterna para reduzir reflexo em plásticos (torch)
+          if (caps.torch) {
+            track.applyConstraints({ advanced: [{ torch: true }] }).catch(() => {});
+          }
         }
+
+
+
 
         readerEl.innerHTML = `
           <video id="zxing-scanner-video" autoplay playsinline muted style="width:100%; max-height:240px; object-fit:cover; display:block;"></video>
@@ -1874,99 +1889,151 @@
       btnEl.innerHTML = '<span>📷</span> Ler Código / QR Code';
     }
 
-    async function handleScannedCode(code, autoRegister = null) {
-      if (autoRegister === null) {
-        const chk = document.getElementById('chk-continuous-scan');
-        autoRegister = chk ? chk.checked : false;
-      }
+   async function handleScannedCode(code, autoRegister = null) {
+  if (autoRegister === null) {
+    const chk = document.getElementById('chk-continuous-scan');
+    autoRegister = chk ? chk.checked : false;
+  }
 
-      let extractedAmountCents = 0;
-      let extractedDesc = '';
-      let detectedCategory = null;
-      const cleanDigits = code.replace(/\D/g, '');
+  let extractedAmountCents = 0;
+  let extractedDesc = '';
+  let detectedCategory = null;
+  const cleanDigits = code.replace(/\D/g, '');
 
-      // 1. Verificar se é QR Code de Nota Fiscal (NFC-e / URL SEFAZ)
-      if (code.includes('http') && (code.includes('nfce') || code.includes('fazenda') || code.includes('sefaz') || code.includes('p='))) {
-        extractedDesc = 'Compra via NFC-e (Cupom Fiscal)';
-        detectedCategory = 'Mercado';
-        const valMatch = code.match(/[?&|](?:vNF|valor|v)=([\d.,]+)/i);
-        if (valMatch && valMatch[1]) {
-          extractedAmountCents = parseCurrencyToCents(valMatch[1].replace('.', ','));
-        }
+  // 1. Verificar se é QR Code de Nota Fiscal (NFC-e / URL SEFAZ)
+  if (code.includes('http') && (code.includes('nfce') || code.includes('fazenda') || code.includes('sefaz') || code.includes('p='))) {
+    extractedDesc = 'Compra via NFC-e (Cupom Fiscal)';
+    detectedCategory = 'Mercado';
+    const valMatch = code.match(/[?&|](?:vNF|valor|v)=([\d.,]+)/i);
+    if (valMatch && valMatch[1]) {
+      extractedAmountCents = parseCurrencyToCents(valMatch[1].replace('.', ','));
+    }
+  }
+  // 2. Verificar se é QR Code PIX (EMVCo BR Code)
+  else if (code.startsWith('000201')) {
+    const pixAmountMatch = code.match(/54(\d{2})(\d+\.\d{2})/);
+    if (pixAmountMatch) {
+      const len = parseInt(pixAmountMatch[1], 10);
+      const valStr = pixAmountMatch[2].substring(0, len);
+      extractedAmountCents = Math.round(parseFloat(valStr) * 100);
+    }
+    const pixMerchantMatch = code.match(/59(\d{2})([^\d]{2,25})/);
+    if (pixMerchantMatch) {
+      const len = parseInt(pixMerchantMatch[1], 10);
+      extractedDesc = 'PIX: ' + code.substring(code.indexOf(pixMerchantMatch[0]) + 4, code.indexOf(pixMerchantMatch[0]) + 4 + len).trim();
+    } else {
+      extractedDesc = 'Pagamento via QR Code PIX';
+    }
+  }
+  // 3. Verificar se é Código de Barras de Boleto Bancário (44 a 48 dígitos)
+  else if (/^\d{44,48}$/.test(cleanDigits)) {
+    const boletoValStr = cleanDigits.length === 44 ? cleanDigits.substring(9, 19) : cleanDigits.substring(37, 47);
+    const valCents = parseInt(boletoValStr, 10);
+    if (!isNaN(valCents) && valCents > 0) {
+      extractedAmountCents = valCents;
+    }
+    extractedDesc = 'Boleto Bancário';
+    detectedCategory = 'Contas';
+  }
+  // 4. Etiqueta de Balança de Supermercado (20 dígitos)
+  else if (/^2\d{19}$/.test(cleanDigits)) {
+    const itemCode = cleanDigits.substring(1, 5);
+    const priceCents = parseInt(cleanDigits.substring(5, 12), 10);
+    if (!isNaN(priceCents) && priceCents > 0) {
+      extractedAmountCents = priceCents;
+    }
+    extractedDesc = `Produto Balança (Cód. ${itemCode})`;
+    detectedCategory = 'Mercado';
+  }
+  // 5. Etiqueta de Balança Padrão EAN-13
+  else if (/^2\d{12}$/.test(cleanDigits)) {
+    const itemCode = cleanDigits.substring(1, 7);
+    const priceCents = parseInt(cleanDigits.substring(7, 12), 10);
+    if (!isNaN(priceCents) && priceCents > 0) {
+      extractedAmountCents = priceCents;
+    }
+    extractedDesc = `Produto Balança (Cód. ${itemCode})`;
+    detectedCategory = 'Mercado';
+  }
+  // 6. Código de Barras de Produto Comercial
+  else if (/^\d{8,24}$/.test(cleanDigits)) {
+    extractedDesc = `Produto Cód. ${cleanDigits}`;
+    detectedCategory = detectedCategory || 'Mercado';
+    const onlineName = await fetchProductNameOnline(cleanDigits);
+    if (onlineName) {
+      extractedDesc = onlineName;
+    }
+  }
+  // 7. QR Code com texto livre ou JSON
+  else {
+    try {
+      const jsonObj = JSON.parse(code);
+      if (jsonObj.valor || jsonObj.amount) {
+        extractedAmountCents = parseCurrencyToCents(String(jsonObj.valor || jsonObj.amount));
       }
-      // 2. Verificar se é QR Code PIX (EMVCo BR Code)
-      else if (code.startsWith('000201')) {
-        const pixAmountMatch = code.match(/54(\d{2})(\d+\.\d{2})/);
-        if (pixAmountMatch) {
-          const len = parseInt(pixAmountMatch[1], 10);
-          const valStr = pixAmountMatch[2].substring(0, len);
-          extractedAmountCents = Math.round(parseFloat(valStr) * 100);
-        }
-        const pixMerchantMatch = code.match(/59(\d{2})([^\d]{2,25})/);
-        if (pixMerchantMatch) {
-          const len = parseInt(pixMerchantMatch[1], 10);
-          extractedDesc = 'PIX: ' + code.substring(code.indexOf(pixMerchantMatch[0]) + 4, code.indexOf(pixMerchantMatch[0]) + 4 + len).trim();
-        } else {
-          extractedDesc = 'Pagamento via QR Code PIX';
-        }
+      if (jsonObj.descricao || jsonObj.description || jsonObj.nome) {
+        extractedDesc = jsonObj.descricao || jsonObj.description || jsonObj.nome;
       }
-      // 3. Verificar se é Código de Barras de Boleto Bancário (44 a 48 dígitos)
-      else if (/^\d{44,48}$/.test(cleanDigits)) {
-        const boletoValStr = cleanDigits.length === 44 ? cleanDigits.substring(9, 19) : cleanDigits.substring(37, 47);
-        const valCents = parseInt(boletoValStr, 10);
-        if (!isNaN(valCents) && valCents > 0) {
-          extractedAmountCents = valCents;
-        }
-        extractedDesc = 'Boleto Bancário';
-        detectedCategory = 'Contas';
+    } catch (e) {
+      const moneyMatch = code.match(/(?:R\$\s*)?(\d+[.,]\d{2})/);
+      if (moneyMatch) {
+        extractedAmountCents = parseCurrencyToCents(moneyMatch[1]);
       }
-      // 4. Etiqueta de Balança de Supermercado (20 dígitos - Ex: 24653000055261811260 = R$ 5,52)
-      else if (/^2\d{19}$/.test(cleanDigits)) {
-        const itemCode = cleanDigits.substring(1, 5);
-        const priceCents = parseInt(cleanDigits.substring(5, 12), 10);
-        if (!isNaN(priceCents) && priceCents > 0) {
-          extractedAmountCents = priceCents;
-        }
-        extractedDesc = `Produto Balança (Cód. ${itemCode})`;
-        detectedCategory = 'Mercado';
-      }
-      // 5. Etiqueta de Balança Padrão EAN-13 (13 dígitos iniciados por 2)
-      else if (/^2\d{12}$/.test(cleanDigits)) {
-        const itemCode = cleanDigits.substring(1, 7);
-        const priceCents = parseInt(cleanDigits.substring(7, 12), 10);
-        if (!isNaN(priceCents) && priceCents > 0) {
-          extractedAmountCents = priceCents;
-        }
-        extractedDesc = `Produto Balança (Cód. ${itemCode})`;
-        detectedCategory = 'Mercado';
-      }
-      // 6. Código de Barras de Produto Comercial (EAN-13 / EAN-8 / UPC / Code 128)
-      else if (/^\d{8,24}$/.test(cleanDigits)) {
-        extractedDesc = `Produto Cód. ${cleanDigits}`;
-        detectedCategory = detectedCategory || 'Mercado';
-        const onlineName = await fetchProductNameOnline(cleanDigits);
-        if (onlineName) {
-          extractedDesc = onlineName;
-        }
-      }
-      // 7. QR Code com texto livre ou JSON
-      else {
-        try {
-          const jsonObj = JSON.parse(code);
-          if (jsonObj.valor || jsonObj.amount) {
-            extractedAmountCents = parseCurrencyToCents(String(jsonObj.valor || jsonObj.amount));
-          }
-          if (jsonObj.descricao || jsonObj.description || jsonObj.nome) {
-            extractedDesc = jsonObj.descricao || jsonObj.description || jsonObj.nome;
-          }
-        } catch (e) {
-          const moneyMatch = code.match(/(?:R\$\s*)?(\d+[.,]\d{2})/);
-          if (moneyMatch) {
-            extractedAmountCents = parseCurrencyToCents(moneyMatch[1]);
-          }
-          extractedDesc = code.substring(0, 45);
-        }
-      }
+      extractedDesc = code.substring(0, 45);
+    }
+  }
+
+  // ===== APLICAR OS DADOS EXTRAÍDOS NO FORMULÁRIO =====
+  const amountInput = document.getElementById('input-expense-amount');
+  const descInput = document.getElementById('input-expense-desc');
+  const categorySelect = document.getElementById('select-expense-category');
+  const dateInput = document.getElementById('input-expense-date');
+  const statusEl = document.getElementById('scanner-status');
+
+  if (extractedAmountCents > 0 && amountInput) {
+    amountInput.value = formatCurrency(extractedAmountCents);
+  }
+
+  if (extractedDesc && descInput) {
+    descInput.value = extractedDesc;
+  }
+
+  if (detectedCategory && categorySelect) {
+    categorySelect.value = detectedCategory;
+  }
+
+  if (dateInput && !dateInput.value) {
+    dateInput.value = getFormattedTodayStr();
+  }
+
+  if (typeof playBeepSound === 'function') {
+    playBeepSound();
+  }
+
+  if (!autoRegister) {
+    stopScanner();
+  }
+
+  if (autoRegister && extractedAmountCents > 0) {
+    appState.expenses.push({
+      id: Date.now().toString() + Math.random().toString(36).substring(2, 6),
+      amountCents: extractedAmountCents,
+      category: detectedCategory || (categorySelect ? categorySelect.value : ''),
+      description: extractedDesc || (detectedCategory || ''),
+      date: (dateInput && dateInput.value) || getFormattedTodayStr(),
+      timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    });
+    saveStateToStorage();
+    renderAll();
+    if (typeof showToast === 'function') {
+      showToast('✓ ' + (extractedDesc || 'Produto') + ' registrado!');
+    }
+  } else if (extractedAmountCents === 0 && statusEl) {
+    statusEl.classList.remove('hidden');
+    statusEl.textContent = 'Código lido, mas o valor não pôde ser identificado. Confira e complete manualmente.';
+  }
+}
+
 
       // Preencher os campos do formulário
       if (extractedAmountCents > 0) {
