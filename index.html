@@ -16,8 +16,8 @@
   <link rel="icon" id="app-favicon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%234f46e5'/><path d='M30 35 h40 a5 5 0 0 1 5 5 v25 a5 5 0 0 1 -5 5 h-40 a5 5 0 0 1 -5 -5 v-25 a5 5 0 0 1 5 -5 Z' fill='none' stroke='%23ffffff' stroke-width='6'/><circle cx='60' cy='48' r='4' fill='%2310b981'/><path d='M35 25 h30' stroke='%23ffffff' stroke-width='6' stroke-linecap='round'/></svg>">
   <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%234f46e5'/><path d='M30 35 h40 a5 5 0 0 1 5 5 v25 a5 5 0 0 1 -5 5 h-40 a5 5 0 0 1 -5 -5 v-25 a5 5 0 0 1 5 -5 Z' fill='none' stroke='%23ffffff' stroke-width='6'/><circle cx='60' cy='48' r='4' fill='%2310b981'/><path d='M35 25 h30' stroke='%23ffffff' stroke-width='6' stroke-linecap='round'/></svg>">
 
-  <!-- Biblioteca leve para leitura de Código de Barras e QR Code -->
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <!-- Biblioteca ZXing de alta precisão (suporta ITF-20 de balança, Code 128, EAN-13 e QR Code com TRY_HARDER) -->
+  <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
 
   <style>
     /* ==========================================================================
@@ -983,12 +983,22 @@
 
         <!-- ÁREA DO LEITOR DE CÓDIGO DE BARRAS / QR CODE -->
         <div class="scanner-box">
-          <button type="button" class="btn-scanner-toggle" id="btn-toggle-scanner">
-            <span>📷</span> Ler Código de Barras / QR Code
-          </button>
-          <div id="qr-reader" class="hidden"></div>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" class="btn-scanner-toggle" id="btn-toggle-scanner" style="flex: 2;">
+              <span>📷</span> Ler Código / QR Code
+            </button>
+            <button type="button" class="btn-scanner-toggle" id="btn-scan-photo" style="flex: 1;" title="Ler de uma foto">
+              <span>🖼️</span> Foto
+            </button>
+            <input type="file" id="input-scan-file" accept="image/*" capture="environment" class="hidden">
+          </div>
+          <div id="qr-reader" class="hidden" style="position: relative; min-height: 220px; background: #000;"></div>
           <div id="scanner-status" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px;" class="hidden">
-            Aponte a câmera para o QR Code (NFC-e / PIX) ou Código de Barras
+            Aponte a câmera para o QR Code ou Código de Barras
+          </div>
+          <div style="display: flex; gap: 6px; margin-top: 8px;">
+            <input type="text" id="input-manual-barcode" class="form-control" style="padding: 8px; font-size: 0.85rem;" placeholder="Ou digite os números do código...">
+            <button type="button" class="btn btn-secondary" id="btn-parse-manual-code" style="flex: 0 0 75px; padding: 8px; font-size: 0.85rem;">Aplicar</button>
           </div>
         </div>
 
@@ -1543,10 +1553,31 @@
     }
 
     /* ==========================================================================
-       LEITOR DE CÓDIGO DE BARRAS E QR CODE (PARSER AUTOMÁTICO)
+       LEITOR DE CÓDIGO DE BARRAS E QR CODE (MOTOR ZXING TRY_HARDER + CONTRASTE)
        ========================================================================== */
-    let html5QrCode = null;
+    let zxingReader = null;
     let isScannerRunning = false;
+    let activeMediaStream = null;
+    let scanLoopTimer = null;
+
+    function createConfiguredZXingReader() {
+      const hints = new Map();
+      if (typeof ZXing !== 'undefined') {
+        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+          ZXing.BarcodeFormat.CODE_128,
+          ZXing.BarcodeFormat.ITF,
+          ZXing.BarcodeFormat.EAN_13,
+          ZXing.BarcodeFormat.EAN_8,
+          ZXing.BarcodeFormat.QR_CODE,
+          ZXing.BarcodeFormat.CODE_39,
+          ZXing.BarcodeFormat.UPC_A,
+          ZXing.BarcodeFormat.UPC_E,
+          ZXing.BarcodeFormat.CODABAR
+        ]);
+      }
+      return new ZXing.BrowserMultiFormatReader(hints);
+    }
 
     document.getElementById('btn-toggle-scanner').addEventListener('click', () => {
       if (isScannerRunning) {
@@ -1556,49 +1587,211 @@
       }
     });
 
-    function startScanner() {
+    // Botão para aplicar código digitado/colado manualmente
+    document.getElementById('btn-parse-manual-code').addEventListener('click', () => {
+      const manualVal = document.getElementById('input-manual-barcode').value.trim();
+      if (manualVal) {
+        handleScannedCode(manualVal);
+        document.getElementById('input-manual-barcode').value = '';
+      }
+    });
+
+    // Suporte para leitura via foto/galeria com tratamento de contraste e rotação automática
+    document.getElementById('btn-scan-photo').addEventListener('click', () => {
+      document.getElementById('input-scan-file').click();
+    });
+
+    document.getElementById('input-scan-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const statusEl = document.getElementById('scanner-status');
+      statusEl.classList.remove('hidden');
+      statusEl.textContent = 'Processando imagem em alto contraste...';
+
+      try {
+        const decodedText = await decodeBarcodeFromImageFile(file);
+        if (decodedText) {
+          handleScannedCode(decodedText);
+          statusEl.classList.add('hidden');
+        } else {
+          statusEl.textContent = 'Código não detectado. Tente aproximar mais o código de barras na foto.';
+        }
+      } catch (err) {
+        console.error('Erro ao ler imagem:', err);
+        statusEl.textContent = 'Não foi possível ler a foto. Tente cortar apenas a área do código de barras.';
+      }
+      e.target.value = '';
+    });
+
+    // Processa a imagem em múltiplas variações (original, alto contraste P&B, rotacionada) para garantir leitura
+    function decodeBarcodeFromImageFile(file) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+
+        img.onload = async () => {
+          URL.revokeObjectURL(url);
+          if (typeof ZXing === 'undefined') {
+            resolve(null);
+            return;
+          }
+
+          const reader = createConfiguredZXingReader();
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+
+          // Redimensiona mantendo nitidez ideal para códigos de barras (largura máx 1400px)
+          const maxDim = 1400;
+          let w = img.width;
+          let h = img.height;
+          if (w > maxDim || h > maxDim) {
+            const ratio = Math.min(maxDim / w, maxDim / h);
+            w = Math.round(w * ratio);
+            h = Math.round(h * ratio);
+          }
+
+          // Tentativa 1: Imagem redimensionada nítida
+          canvas.width = w;
+          canvas.height = h;
+          ctx.drawImage(img, 0, 0, w, h);
+          let res = tryDecodeCanvas(reader, canvas);
+          if (res) return resolve(res);
+
+          // Tentativa 2: Filtro de Alto Contraste (Binarização para separar barras pretas do papel)
+          const imgData = ctx.getImageData(0, 0, w, h);
+          const data = imgData.data;
+          for (let i = 0; i < data.length; i += 4) {
+            const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+            const val = lum < 135 ? 0 : 255;
+            data[i] = data[i + 1] = data[i + 2] = val;
+          }
+          ctx.putImageData(imgData, 0, 0);
+          res = tryDecodeCanvas(reader, canvas);
+          if (res) return resolve(res);
+
+          // Tentativa 3: Recorte central horizontal (onde normalmente fica o código na foto)
+          const cropCanvas = document.createElement('canvas');
+          const cropCtx = cropCanvas.getContext('2d');
+          const cropH = Math.round(h * 0.45);
+          const cropY = Math.round((h - cropH) / 2);
+          cropCanvas.width = w;
+          cropCanvas.height = cropH;
+          cropCtx.drawImage(canvas, 0, cropY, w, cropH, 0, 0, w, cropH);
+          res = tryDecodeCanvas(reader, cropCanvas);
+          if (res) return resolve(res);
+
+          // Tentativa 4: Rotacionado 90 graus (caso a foto tenha sido tirada de lado)
+          const rotCanvas = document.createElement('canvas');
+          const rotCtx = rotCanvas.getContext('2d');
+          rotCanvas.width = h;
+          rotCanvas.height = w;
+          rotCtx.translate(h / 2, w / 2);
+          rotCtx.rotate(Math.PI / 2);
+          rotCtx.drawImage(canvas, -w / 2, -h / 2);
+          res = tryDecodeCanvas(reader, rotCanvas);
+          if (res) return resolve(res);
+
+          resolve(null);
+        };
+
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          resolve(null);
+        };
+
+        img.src = url;
+      });
+    }
+
+    function tryDecodeCanvas(reader, canvas) {
+      try {
+        const luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(canvas);
+        const binaryBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource));
+        const result = reader.decodeBitmap(binaryBitmap);
+        return result ? result.getText() : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    async function startScanner() {
       const readerEl = document.getElementById('qr-reader');
       const statusEl = document.getElementById('scanner-status');
       const btnEl = document.getElementById('btn-toggle-scanner');
 
-      if (typeof Html5Qrcode === 'undefined') {
-        showToast('⚠️ Biblioteca do leitor ainda carregando...');
+      if (typeof ZXing === 'undefined') {
+        statusEl.classList.remove('hidden');
+        statusEl.textContent = 'Biblioteca de leitura indisponível offline. Use o campo numérico abaixo.';
         return;
       }
 
       readerEl.classList.remove('hidden');
       statusEl.classList.remove('hidden');
-      statusEl.textContent = 'Iniciando câmera...';
-      btnEl.innerHTML = '<span>⏹️</span> Parar Leitor';
+      statusEl.textContent = 'Abrindo câmera...';
+      btnEl.innerHTML = '<span>⏹️</span> Parar';
+      isScannerRunning = true;
 
-      html5QrCode = new Html5Qrcode("qr-reader");
-      
-      const config = {
-        fps: 10,
-        qrbox: { width: 240, height: 150 },
-        aspectRatio: 1.5
-      };
+      try {
+        activeMediaStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          },
+          audio: false
+        });
 
-      html5QrCode.start(
-        { facingMode: "environment" },
-        config,
-        (decodedText) => {
-          // Sucesso na leitura
-          handleScannedCode(decodedText);
-          stopScanner();
-        },
-        (errorMessage) => {
-          // Ignorar erros contínuos de busca de frame
+        // Tenta ativar foco contínuo se o hardware suportar
+        const track = activeMediaStream.getVideoTracks()[0];
+        if (track && track.getCapabilities) {
+          const caps = track.getCapabilities();
+          if (caps.focusMode && caps.focusMode.includes('continuous')) {
+            track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
+          }
         }
-      ).then(() => {
-        isScannerRunning = true;
-        statusEl.textContent = 'Aponte a câmera para o código de barras ou QR Code';
-      }).catch((err) => {
+
+        readerEl.innerHTML = `
+          <video id="zxing-scanner-video" autoplay playsinline muted style="width:100%; max-height:240px; object-fit:cover; display:block;"></video>
+          <div style="position:absolute; top:50%; left:6%; right:6%; height:2px; background:#ef4444; box-shadow:0 0 8px #ef4444; transform:translateY(-50%); pointer-events:none;"></div>
+        `;
+
+        const videoEl = document.getElementById('zxing-scanner-video');
+        videoEl.srcObject = activeMediaStream;
+        await videoEl.play();
+
+        statusEl.textContent = 'Posicione a linha vermelha sobre todas as barras do código';
+
+        zxingReader = createConfiguredZXingReader();
+        const frameCanvas = document.createElement('canvas');
+        const frameCtx = frameCanvas.getContext('2d');
+
+        scanLoopTimer = setInterval(() => {
+          if (!isScannerRunning || videoEl.readyState < 2) return;
+          const vw = videoEl.videoWidth;
+          const vh = videoEl.videoHeight;
+          if (!vw || !vh) return;
+
+          // Analisa a faixa central horizontal onde está a linha vermelha (muito mais rápido e preciso)
+          const stripH = Math.round(vh * 0.45);
+          const stripY = Math.round((vh - stripH) / 2);
+          frameCanvas.width = vw;
+          frameCanvas.height = stripH;
+          frameCtx.drawImage(videoEl, 0, stripY, vw, stripH, 0, 0, vw, stripH);
+
+          const found = tryDecodeCanvas(zxingReader, frameCanvas);
+          if (found) {
+            handleScannedCode(found);
+            stopScanner();
+          }
+        }, 200);
+
+      } catch (err) {
         console.error('Erro ao abrir câmera:', err);
-        statusEl.textContent = 'Não foi possível acessar a câmera. Verifique as permissões.';
-        btnEl.innerHTML = '<span>📷</span> Ler Código de Barras / QR Code';
+        statusEl.textContent = 'Câmera não autorizada. Use "🖼️ Foto" ou digite os números abaixo.';
+        btnEl.innerHTML = '<span>📷</span> Ler Código / QR Code';
         isScannerRunning = false;
-      });
+      }
     }
 
     function stopScanner() {
@@ -1606,28 +1799,38 @@
       const statusEl = document.getElementById('scanner-status');
       const btnEl = document.getElementById('btn-toggle-scanner');
 
-      if (html5QrCode && isScannerRunning) {
-        html5QrCode.stop().then(() => {
-          html5QrCode.clear();
-        }).catch(err => console.error(err));
+      if (scanLoopTimer) {
+        clearInterval(scanLoopTimer);
+        scanLoopTimer = null;
+      }
+
+      if (activeMediaStream) {
+        activeMediaStream.getTracks().forEach(track => track.stop());
+        activeMediaStream = null;
+      }
+
+      if (zxingReader) {
+        try { zxingReader.reset(); } catch (e) {}
+        zxingReader = null;
       }
 
       isScannerRunning = false;
+      readerEl.innerHTML = '';
       readerEl.classList.add('hidden');
       statusEl.classList.add('hidden');
-      btnEl.innerHTML = '<span>📷</span> Ler Código de Barras / QR Code';
+      btnEl.innerHTML = '<span>📷</span> Ler Código / QR Code';
     }
 
     function handleScannedCode(code) {
       let extractedAmountCents = 0;
       let extractedDesc = '';
       let detectedCategory = null;
+      const cleanDigits = code.replace(/\D/g, '');
 
       // 1. Verificar se é QR Code de Nota Fiscal (NFC-e / URL SEFAZ)
       if (code.includes('http') && (code.includes('nfce') || code.includes('fazenda') || code.includes('sefaz') || code.includes('p='))) {
         extractedDesc = 'Compra via NFC-e (Cupom Fiscal)';
         detectedCategory = 'Mercado';
-        // Tenta extrair valor se estiver embutido na query string (padrão de alguns estados)
         const valMatch = code.match(/[?&|](?:vNF|valor|v)=([\d.,]+)/i);
         if (valMatch && valMatch[1]) {
           extractedAmountCents = parseCurrencyToCents(valMatch[1].replace('.', ','));
@@ -1635,14 +1838,12 @@
       }
       // 2. Verificar se é QR Code PIX (EMVCo BR Code)
       else if (code.startsWith('000201')) {
-        // Campo 54 no padrão EMV PIX representa o valor da transação (ex: 540515.50)
         const pixAmountMatch = code.match(/54(\d{2})(\d+\.\d{2})/);
         if (pixAmountMatch) {
           const len = parseInt(pixAmountMatch[1], 10);
           const valStr = pixAmountMatch[2].substring(0, len);
           extractedAmountCents = Math.round(parseFloat(valStr) * 100);
         }
-        // Campo 59 representa o nome do recebedor (Merchant Name)
         const pixMerchantMatch = code.match(/59(\d{2})([^\d]{2,25})/);
         if (pixMerchantMatch) {
           const len = parseInt(pixMerchantMatch[1], 10);
@@ -1651,10 +1852,9 @@
           extractedDesc = 'Pagamento via QR Code PIX';
         }
       }
-      // 3. Verificar se é Código de Barras de Boleto Bancário (44 dígitos)
-      else if (/^\d{44}$/.test(code)) {
-        // Posições 10 a 19 (índice 9 a 19) contêm o valor em centavos no padrão FEBRABAN
-        const boletoValStr = code.substring(9, 19);
+      // 3. Verificar se é Código de Barras de Boleto Bancário (44 a 48 dígitos)
+      else if (/^\d{44,48}$/.test(cleanDigits)) {
+        const boletoValStr = cleanDigits.length === 44 ? cleanDigits.substring(9, 19) : cleanDigits.substring(37, 47);
         const valCents = parseInt(boletoValStr, 10);
         if (!isNaN(valCents) && valCents > 0) {
           extractedAmountCents = valCents;
@@ -1662,13 +1862,32 @@
         extractedDesc = 'Boleto Bancário';
         detectedCategory = 'Contas';
       }
-      // 4. Código de Barras de Produto (EAN-13 / EAN-8 / UPC) ou Texto Genérico
-      else if (/^\d{8,14}$/.test(code)) {
-        extractedDesc = `Produto Cód. ${code}`;
-        // Consulta rápida offline/online opcional via OpenFoodFacts caso haja internet
-        fetchProductInfo(code);
+      // 4. Etiqueta de Balança de Supermercado (20 dígitos - Ex: 24653000055261811260 = R$ 5,52)
+      else if (/^2\d{19}$/.test(cleanDigits)) {
+        const itemCode = cleanDigits.substring(1, 5);
+        const priceCents = parseInt(cleanDigits.substring(5, 12), 10);
+        if (!isNaN(priceCents) && priceCents > 0) {
+          extractedAmountCents = priceCents;
+        }
+        extractedDesc = `Produto Balança (Cód. ${itemCode})`;
+        detectedCategory = 'Mercado';
       }
-      // 5. QR Code com texto livre ou JSON (ex: {"valor": 25.50, "descricao": "Café"})
+      // 5. Etiqueta de Balança Padrão EAN-13 (13 dígitos iniciados por 2)
+      else if (/^2\d{12}$/.test(cleanDigits)) {
+        const itemCode = cleanDigits.substring(1, 7);
+        const priceCents = parseInt(cleanDigits.substring(7, 12), 10);
+        if (!isNaN(priceCents) && priceCents > 0) {
+          extractedAmountCents = priceCents;
+        }
+        extractedDesc = `Produto Balança (Cód. ${itemCode})`;
+        detectedCategory = 'Mercado';
+      }
+      // 6. Código de Barras de Produto Comercial (EAN-13 / EAN-8 / UPC / Code 128)
+      else if (/^\d{8,24}$/.test(cleanDigits)) {
+        extractedDesc = `Produto Cód. ${cleanDigits}`;
+        fetchProductInfo(cleanDigits);
+      }
+      // 7. QR Code com texto livre ou JSON
       else {
         try {
           const jsonObj = JSON.parse(code);
@@ -1679,7 +1898,6 @@
             extractedDesc = jsonObj.descricao || jsonObj.description || jsonObj.nome;
           }
         } catch (e) {
-          // Texto simples: tenta achar um valor numérico (R$ XX,XX) e usa o texto como descrição
           const moneyMatch = code.match(/(?:R\$\s*)?(\d+[.,]\d{2})/);
           if (moneyMatch) {
             extractedAmountCents = parseCurrencyToCents(moneyMatch[1]);
