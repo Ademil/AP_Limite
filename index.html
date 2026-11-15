@@ -1,434 +1,1971 @@
 <!DOCTYPE html>
-<html lang="pt-pt">
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>APAVAN - Dose Controlada</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
-        
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f8fafc;
-            -webkit-tap-highlight-color: transparent;
-            user-select: none;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Meu Limite Diário</title>
+  
+  <!-- PWA & Mobile Settings -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Limite Diário">
+  <meta name="theme-color" content="#4f46e5">
+  <meta name="description" content="Gaste hoje sem comprometer o amanhã. Controle seu limite diário com base no seu salário.">
+  
+  <!-- Favicon / Apple Touch Icon Dynamic SVG -->
+  <link rel="icon" id="app-favicon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%234f46e5'/><path d='M30 35 h40 a5 5 0 0 1 5 5 v25 a5 5 0 0 1 -5 5 h-40 a5 5 0 0 1 -5 -5 v-25 a5 5 0 0 1 5 -5 Z' fill='none' stroke='%23ffffff' stroke-width='6'/><circle cx='60' cy='48' r='4' fill='%2310b981'/><path d='M35 25 h30' stroke='%23ffffff' stroke-width='6' stroke-linecap='round'/></svg>">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%234f46e5'/><path d='M30 35 h40 a5 5 0 0 1 5 5 v25 a5 5 0 0 1 -5 5 h-40 a5 5 0 0 1 -5 -5 v-25 a5 5 0 0 1 5 -5 Z' fill='none' stroke='%23ffffff' stroke-width='6'/><circle cx='60' cy='48' r='4' fill='%2310b981'/><path d='M35 25 h30' stroke='%23ffffff' stroke-width='6' stroke-linecap='round'/></svg>">
 
-        .btn-confirm {
-            min-height: 48px;
-            transition: all 0.2s ease;
-        }
+  <!-- Biblioteca leve para leitura de Código de Barras e QR Code -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
-        .btn-confirm:active {
-            transform: scale(0.96);
-        }
+  <style>
+    /* ==========================================================================
+       1. VARIÁVEIS DE TEMA & CSS RESET
+       ========================================================================== */
+    :root {
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --primary-light: #e0e7ff;
+      --background: #f8fafc;
+      --surface: #ffffff;
+      --surface-border: #e2e8f0;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --success: #10b981;
+      --success-light: #d1fae5;
+      --warning: #f59e0b;
+      --warning-light: #fef3c7;
+      --danger: #ef4444;
+      --danger-light: #fee2e2;
+      --radius: 16px;
+      --radius-sm: 8px;
+      --shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+      --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+      --transition: all 0.25s ease;
+      --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+    }
 
-        .card-med {
-            animation: fadeIn 0.3s ease-out;
-        }
+    [data-theme="dark"] {
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --primary-light: rgba(99, 102, 241, 0.15);
+      --background: #0f172a;
+      --surface: #1e293b;
+      --surface-border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --success: #10b981;
+      --success-light: rgba(16, 185, 129, 0.15);
+      --warning: #f59e0b;
+      --warning-light: rgba(245, 158, 11, 0.15);
+      --danger: #ef4444;
+      --danger-light: rgba(239, 68, 68, 0.15);
+    }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
 
-        .freq-btn.active {
-            background-color: #facc15 !important;
-            color: #000 !important;
-            border-color: #eab308 !important;
-        }
+    body {
+      background-color: var(--background);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      min-height: 100vh;
+      overflow-x: hidden;
+      transition: background-color 0.3s, color 0.3s;
+    }
 
-        .med-group-header {
-            border-left: 8px solid #facc15;
-        }
+    /* Container Principal Mobile-First */
+    #app-container {
+      width: 100%;
+      max-width: 500px;
+      background: var(--background);
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      position: relative;
+      padding-bottom: calc(75px + var(--safe-area-bottom));
+    }
 
-        .loading-shimmer {
-            background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
-            background-size: 200% 100%;
-            animation: shimmer 1.5s infinite;
-        }
+    /* Ocultar elementos desnecessários */
+    .hidden {
+      display: none !important;
+    }
 
-        @keyframes shimmer {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
-        }
-    </style>
+    /* ==========================================================================
+       2. CABEÇALHO DA APLICAÇÃO
+       ========================================================================== */
+    header.app-header {
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface);
+      border-bottom: 1px solid var(--surface-border);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo img, .brand-logo svg {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      object-fit: cover;
+    }
+
+    .brand-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+    }
+
+    .brand-subtitle {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-icon {
+      background: transparent;
+      border: none;
+      color: var(--text);
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1.2rem;
+      transition: var(--transition);
+    }
+
+    .btn-icon:hover {
+      background: var(--surface-border);
+    }
+
+    /* ==========================================================================
+       3. CONTEÚDO PRINCIPAL E SEÇÕES
+       ========================================================================== */
+    main.content {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    /* Highlight Card (Quanto Posso Gastar Hoje) */
+    .card-hero {
+      background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+      color: #ffffff;
+      text-align: center;
+      padding: 24px 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card-hero .label {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      opacity: 0.9;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .card-hero .amount {
+      font-size: 2.8rem;
+      font-weight: 800;
+      margin-bottom: 16px;
+      letter-spacing: -1px;
+      line-height: 1;
+    }
+
+    .card-hero-details {
+      display: flex;
+      justify-content: space-between;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      padding-top: 12px;
+      font-size: 0.85rem;
+      opacity: 0.95;
+    }
+
+    /* Barra de Progresso do Limite */
+    .progress-container {
+      margin-top: 12px;
+    }
+
+    .progress-bar-bg {
+      background: var(--surface-border);
+      height: 12px;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--success);
+      width: 0%;
+      transition: width 0.4s ease, background-color 0.3s;
+    }
+
+    .progress-bar-fill.warning { background: var(--warning); }
+    .progress-bar-fill.danger { background: var(--danger); }
+
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    /* Status Badge */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+
+    .status-badge.success { background: var(--success-light); color: var(--success); }
+    .status-badge.warning { background: var(--warning-light); color: var(--warning); }
+    .status-badge.danger { background: var(--danger-light); color: var(--danger); }
+
+    /* Botão Principal Registrar Gasto */
+    .btn-primary-action {
+      background: var(--primary);
+      color: white;
+      border: none;
+      width: 100%;
+      padding: 16px;
+      border-radius: var(--radius);
+      font-size: 1.1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+      transition: var(--transition);
+    }
+
+    .btn-primary-action:active {
+      transform: scale(0.98);
+    }
+
+    /* Seção de Lista de Gastos */
+    .section-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .expense-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .expense-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius-sm);
+    }
+
+    .expense-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .expense-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--primary-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+    }
+
+    .expense-details .title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .expense-details .subtitle {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .expense-value {
+      font-weight: 700;
+      color: var(--danger);
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-delete-expense {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 1.1rem;
+    }
+
+    .btn-delete-expense:hover { color: var(--danger); }
+
+    /* Cards de Resumo */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      padding: 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--surface-border);
+    }
+
+    .stat-card .title {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .stat-card .value {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    /* ==========================================================================
+       4. MENU INFERIOR FIXO DE NAVEGAÇÃO
+       ========================================================================== */
+    nav.bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 500px;
+      background: var(--surface);
+      border-top: 1px solid var(--surface-border);
+      display: flex;
+      justify-content: space-around;
+      padding: 8px 0 calc(8px + var(--safe-area-bottom)) 0;
+      z-index: 30;
+    }
+
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.7rem;
+      gap: 4px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      width: 20%;
+    }
+
+    .nav-item.active {
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .nav-item svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
+    }
+
+    /* ==========================================================================
+       5. MODAIS & OVERLAYS
+       ========================================================================== */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      z-index: 50;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-content {
+      background: var(--surface);
+      width: 100%;
+      max-width: 500px;
+      border-top-left-radius: 20px;
+      border-top-right-radius: 20px;
+      padding: 24px;
+      max-height: 85vh;
+      overflow-y: auto;
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+    }
+
+    .modal-overlay.active .modal-content {
+      transform: translateY(0);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .modal-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+    }
+
+    /* Formulários e Inputs */
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius-sm);
+      background: var(--background);
+      color: var(--text);
+      font-size: 1rem;
+      outline: none;
+    }
+
+    .form-control:focus {
+      border-color: var(--primary);
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .btn-secondary {
+      background: var(--surface-border);
+      color: var(--text);
+    }
+
+    .btn-submit {
+      background: var(--primary);
+      color: white;
+    }
+
+    /* ==========================================================================
+       6. COMPONENTES ESPECÍFICOS (CALENDÁRIO, RELATÓRIOS, CONFIGS)
+       ========================================================================== */
+    /* Calendário */
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 6px;
+      margin-top: 12px;
+      text-align: center;
+    }
+
+    .calendar-day-header {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      padding: 4px 0;
+    }
+
+    .calendar-day {
+      aspect-ratio: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .calendar-day.empty { background: transparent; border: none; cursor: default; }
+    .calendar-day.saved { border-bottom: 3px solid var(--success); }
+    .calendar-day.warning { border-bottom: 3px solid var(--warning); }
+    .calendar-day.exceeded { border-bottom: 3px solid var(--danger); }
+    .calendar-day.today { font-weight: 800; background: var(--primary-light); }
+
+    /* Gráficos Canvas simples */
+    .chart-container {
+      width: 100%;
+      height: 200px;
+      position: relative;
+      margin-top: 12px;
+    }
+
+    canvas {
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    /* Animação Toast */
+    .toast {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-100px);
+      background: #10b981;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 30px;
+      font-weight: 600;
+      box-shadow: var(--shadow-lg);
+      transition: transform 0.3s ease;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* Estilos do Scanner de Código de Barras e QR Code */
+    .scanner-box {
+      margin-bottom: 16px;
+      border: 2px dashed var(--primary);
+      border-radius: var(--radius-sm);
+      padding: 10px;
+      background: var(--background);
+      text-align: center;
+    }
+
+    #qr-reader {
+      width: 100%;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    #qr-reader video {
+      border-radius: var(--radius-sm);
+      object-fit: cover;
+    }
+
+    .btn-scanner-toggle {
+      background: var(--primary-light);
+      color: var(--primary);
+      border: 1px solid var(--primary);
+      width: 100%;
+      padding: 10px;
+      border-radius: var(--radius-sm);
+      font-weight: 700;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .btn-scanner-toggle:hover {
+      background: var(--primary);
+      color: #ffffff;
+    }
+  </style>
 </head>
-<body class="min-h-screen pb-20">
+<body>
 
-    <header class="bg-yellow-400 text-black p-5 sticky top-0 z-50 shadow-md">
-        <div class="max-w-md mx-auto flex justify-between items-center">
-            <div>
-                <h1 class="text-2xl font-black tracking-tighter uppercase">APAVAN</h1>
-                <p class="text-[10px] font-bold opacity-70 uppercase tracking-widest">Dose Controlada</p>
-            </div>
-            <button onclick="openModal()" class="bg-black text-white px-5 py-2 rounded-2xl font-black shadow-md active:scale-95 transition-transform text-sm">
-                + NOVO
-            </button>
+  <div id="app-container">
+    
+    <!-- CABEÇALHO DA APLICAÇÃO -->
+    <header class="app-header">
+      <div class="brand-logo" id="header-logo-container">
+        <!-- SVG Padrão para Logo -->
+        <svg id="app-default-logo" viewBox="0 0 100 100" width="36" height="36">
+          <rect width="100" height="100" rx="22" fill="#4f46e5"/>
+          <path d="M30 35 h40 a5 5 0 0 1 5 5 v25 a5 5 0 0 1 -5 5 h-40 a5 5 0 0 1 -5 -5 v-25 a5 5 0 0 1 5 -5 Z" fill="none" stroke="#ffffff" stroke-width="6"/>
+          <circle cx="60" cy="48" r="4" fill="#10b981"/>
+          <path d="M35 25 h30" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>
+        </svg>
+        <img id="app-custom-logo" class="hidden" src="" alt="Logo Personalizada">
+        <div>
+          <div class="brand-title">MEU LIMITE DIÁRIO</div>
+          <div class="brand-subtitle" id="current-date-display">--</div>
         </div>
+      </div>
+      <div class="header-actions">
+        <button class="btn-icon" id="toggle-theme-btn" aria-label="Alternar Tema">🌙</button>
+      </div>
     </header>
 
-    <main class="max-w-md mx-auto p-4 space-y-6">
+    <!-- CONTEÚDO DINÂMICO DA APLICAÇÃO -->
+    <main class="content">
+
+      <!-- TELA 1: INTEGRADA ONBOARDING / CONFIGURAÇÃO INICIAL (Oculta se já configurado) -->
+      <section id="sec-onboarding" class="hidden">
+        <div class="card" style="text-align: center;">
+          <h1 style="font-size: 1.5rem; margin-bottom: 8px;">👋 BEM-VINDO</h1>
+          <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px;">
+            Descubra quanto você pode gastar hoje sem comprometer o seu orçamento do mês.
+          </p>
+
+          <form id="form-onboarding">
+            <div class="form-group" style="text-align: left;">
+              <label for="input-salary">Qual é o seu salário líquido mensal?</label>
+              <input type="text" id="input-salary" class="form-control" placeholder="R$ 0,00" required>
+            </div>
+
+            <div class="grid-2" style="text-align: left;">
+              <div class="form-group">
+                <label for="input-pct-expenses">% Gastos</label>
+                <input type="number" id="input-pct-expenses" class="form-control" value="80" min="0" max="100" required>
+              </div>
+              <div class="form-group">
+                <label for="input-pct-reserve">% Reserva</label>
+                <input type="number" id="input-pct-reserve" class="form-control" value="20" min="0" max="100" required>
+              </div>
+            </div>
+
+            <button type="submit" class="btn-primary-action" style="margin-top: 10px;">
+              CALCULAR MEU LIMITE
+            </button>
+          </form>
+
+          <div style="margin-top: 20px;">
+            <button id="btn-load-demo" style="background: none; border: none; color: var(--primary); font-size: 0.85rem; cursor: pointer; text-decoration: underline;">
+              Ou carregar Modo Demonstração
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- TELA 2: DASHBOARD PRINCIPAL -->
+      <section id="sec-dashboard">
         
-        <!-- Alertas de Stock e Reposição -->
-        <div id="stock-alerts" class="hidden space-y-3">
-            <h2 class="text-red-600 font-extrabold flex items-center gap-2 text-lg uppercase tracking-tight">
-                <span>⚠️</span> Repor Estoque Agora:
-            </h2>
-            <div id="low-stock-list" class="space-y-3"></div>
+        <!-- CARD HERO: LIMITE DISPONÍVEL DE HOJE -->
+        <div class="card card-hero">
+          <div class="label">VOCÊ PODE GASTAR HOJE</div>
+          <div class="amount" id="dash-today-limit">R$ 0,00</div>
+          
+          <div class="card-hero-details">
+            <div>Base Diária: <strong id="dash-base-limit">R$ 0,00</strong></div>
+            <div>Saldo Anterior: <strong id="dash-accumulated-balance">R$ 0,00</strong></div>
+          </div>
         </div>
 
-        <!-- Lista Organizada por Medicamento -->
-        <div class="space-y-4">
-            <h2 class="text-slate-900 font-black text-xl flex items-center gap-2 uppercase italic tracking-tighter">
-                Planos de Tratamento
-            </h2>
-            <div id="med-groups-container" class="space-y-8">
-                <div class="text-center py-20 text-slate-400 italic font-medium text-sm">A carregar dados...</div>
+        <!-- PROGRESSO DE GASTOS HOJE E STATUS -->
+        <div class="card">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: 700; font-size: 0.9rem;">GASTO HOJE</span>
+            <span style="font-weight: 700; font-size: 0.9rem;" id="dash-today-spent-text">R$ 0,00</span>
+          </div>
+
+          <div class="progress-container">
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" id="dash-progress-fill"></div>
             </div>
+            <div class="progress-info">
+              <span id="dash-progress-pct">0% utilizado</span>
+              <span id="dash-remaining-today">Restante: R$ 0,00</span>
+            </div>
+          </div>
+
+          <div style="text-align: center; margin-top: 8px;">
+            <div class="status-badge success" id="dash-status-badge">
+              🟢 DENTRO DO LIMITE
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;" id="dash-status-message">
+              Muito bem! Você está controlando seus gastos.
+            </div>
+          </div>
         </div>
+
+        <!-- BOTÃO DE AÇÃO RÁPIDA -->
+        <button class="btn-primary-action" id="btn-open-expense-modal">
+          <span>➕</span> REGISTRAR GASTO
+        </button>
+
+        <!-- CALCULADORA RÁPIDA: POSSO GASTAR? -->
+        <div class="card">
+          <div class="section-title">
+            <span>🔮 Posso Gastar?</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="input-calc-check" class="form-control" placeholder="R$ Quanto pretende gastar?">
+            <button class="btn btn-submit" id="btn-run-calc" style="flex: 0 0 90px;">Verificar</button>
+          </div>
+          <div id="calc-result" class="hidden" style="margin-top: 10px; font-size: 0.85rem; padding: 10px; border-radius: var(--radius-sm);"></div>
+        </div>
+
+        <!-- LISTA DE GASTOS DO DIA -->
+        <div>
+          <div class="section-title">
+            <span>GASTOS DE HOJE</span>
+            <span style="font-size: 0.8rem; color: var(--text-muted);" id="today-expense-count">0 lançamentos</span>
+          </div>
+          <div class="expense-list" id="dash-expense-list">
+            <!-- Renderizado dinamicamente -->
+          </div>
+        </div>
+
+        <!-- RESUMO DO MÊS E RESERVA -->
+        <div class="grid-2">
+          <div class="stat-card">
+            <div class="title">Orçamento Mensal</div>
+            <div class="value" id="dash-month-budget">R$ 0,00</div>
+          </div>
+          <div class="stat-card">
+            <div class="title">Total Gasto Mês</div>
+            <div class="value" style="color: var(--danger);" id="dash-month-spent">R$ 0,00</div>
+          </div>
+        </div>
+
+        <div class="card" style="background: var(--primary-light); border-color: var(--primary);">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-size: 0.8rem; font-weight: 600; color: var(--primary);">💰 MINHA RESERVA (20%)</div>
+              <div style="font-size: 1.2rem; font-weight: 800; color: var(--primary);" id="dash-reserve-amount">R$ 0,00</div>
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); text-align: right;">
+              Preservada e Intocada
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- TELA 3: CALENDÁRIO MENSUAL -->
+      <section id="sec-calendar" class="hidden">
+        <div class="card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <button class="btn-icon" id="btn-prev-month">◀</button>
+            <h2 style="font-size: 1.1rem;" id="calendar-month-year-title">Mês Ano</h2>
+            <button class="btn-icon" id="btn-next-month">▶</button>
+          </div>
+
+          <div class="calendar-grid">
+            <div class="calendar-day-header">Dom</div>
+            <div class="calendar-day-header">Seg</div>
+            <div class="calendar-day-header">Ter</div>
+            <div class="calendar-day-header">Qua</div>
+            <div class="calendar-day-header">Qui</div>
+            <div class="calendar-day-header">Sex</div>
+            <div class="calendar-day-header">Sáb</div>
+          </div>
+
+          <div class="calendar-grid" id="calendar-days-container">
+            <!-- Renderizado dinamicamente -->
+          </div>
+        </div>
+
+        <!-- Detalhes do Dia Selecionado -->
+        <div class="card hidden" id="calendar-day-details">
+          <div class="section-title" id="cal-detail-date">Detalhes do Dia</div>
+          <div class="grid-2">
+            <div>Limite do Dia: <strong id="cal-detail-limit">R$ 0,00</strong></div>
+            <div>Gastos Total: <strong id="cal-detail-spent">R$ 0,00</strong></div>
+          </div>
+          <div style="margin-top: 8px; font-size: 0.9rem;">
+            Saldo do Dia: <strong id="cal-detail-balance">R$ 0,00</strong>
+          </div>
+        </div>
+      </section>
+
+      <!-- TELA 4: RELATÓRIOS E PREVISÃO -->
+      <section id="sec-reports" class="hidden">
+        
+        <!-- Previsão e Ritmo -->
+        <div class="card">
+          <div class="section-title">🔮 PREVISÃO DO MÊS</div>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;" id="report-forecast-text">
+            Calculando previsão de término do mês...
+          </p>
+          <div id="report-pace-badge" class="status-badge success">
+            RITMO OK
+          </div>
+        </div>
+
+        <!-- Gráfico de Categorias -->
+        <div class="card">
+          <div class="section-title">GASTOS POR CATEGORIA</div>
+          <div class="chart-container">
+            <canvas id="chart-categories"></canvas>
+          </div>
+          <div id="category-legend" style="margin-top: 12px; font-size: 0.8rem; display: flex; flex-wrap: wrap; gap: 8px;"></div>
+        </div>
+
+        <!-- Evolução do Saldo Acumulado -->
+        <div class="card">
+          <div class="section-title">EVOLUÇÃO DO SALDO</div>
+          <div class="chart-container">
+            <canvas id="chart-balance-evolution"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- TELA 5: CONFIGURAÇÕES E HISTÓRICO -->
+      <section id="sec-settings" class="hidden">
+        
+        <!-- Histórico de Meses Fechados -->
+        <div class="card">
+          <div class="section-title">📚 HISTÓRICO DE MESES</div>
+          <div id="history-list" style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- Renderizado via JS -->
+          </div>
+        </div>
+
+        <!-- Ajustar Parâmetros -->
+        <div class="card">
+          <div class="section-title">⚙️ CONFIGURAÇÕES FINANCEIRAS</div>
+          <form id="form-settings">
+            <div class="form-group">
+              <label>Salário Mensal Límpo (R$)</label>
+              <input type="text" id="settings-salary" class="form-control">
+            </div>
+            <div class="grid-2">
+              <div class="form-group">
+                <label>% Gastos</label>
+                <input type="number" id="settings-pct-expense" class="form-control">
+              </div>
+              <div class="form-group">
+                <label>% Reserva</label>
+                <input type="number" id="settings-pct-reserve" class="form-control">
+              </div>
+            </div>
+            <button type="submit" class="btn btn-submit" style="width: 100%;">Salvar Ajustes</button>
+          </form>
+        </div>
+
+        <!-- Personalização de Logo -->
+        <div class="card">
+          <div class="section-title">🎨 PERSONALIZAR APLICATIVO</div>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;">
+            Envie sua própria logo (PNG, JPG, WEBP) para personalizar o aplicativo.
+          </p>
+          <input type="file" id="input-logo-file" accept="image/*" class="form-control" style="margin-bottom: 8px;">
+          <button class="btn btn-secondary" id="btn-remove-logo" style="width: 100%; font-size: 0.8rem;">Remover Logo Personalizada</button>
+        </div>
+
+        <!-- Backup & Dados -->
+        <div class="card">
+          <div class="section-title">💾 BACKUP E PRIVACIDADE</div>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;">
+            🔒 Seus dados ficam armazenados exclusivamente no seu dispositivo.
+          </p>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary" id="btn-export-backup">Exportar JSON</button>
+            <button class="btn btn-secondary" id="btn-trigger-import">Importar JSON</button>
+            <input type="file" id="input-import-backup" accept=".json" class="hidden">
+          </div>
+          <button class="btn" id="btn-reset-data" style="background: var(--danger-light); color: var(--danger); width: 100%; margin-top: 12px;">
+            Apagar Todos os Dados
+          </button>
+        </div>
+
+      </section>
+
     </main>
 
-    <!-- Modal de Registo -->
-    <div id="modal-form" class="fixed inset-0 bg-black/60 hidden z-[100] flex items-end sm:items-center justify-center p-4">
-        <div class="bg-white w-full max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] p-7 space-y-5 max-h-[95vh] overflow-y-auto shadow-2xl">
-            <div class="flex justify-between items-center">
-                <h2 class="text-2xl font-black text-slate-900 uppercase italic">Novo Registo</h2>
-                <button onclick="closeModal()" class="text-slate-300 text-4xl p-2 hover:text-slate-600 transition-colors">&times;</button>
-            </div>
-            
-            <form id="form-medication" class="space-y-4">
-                <div>
-                    <label class="block text-indigo-600 font-black text-[10px] mb-1 uppercase tracking-widest">Identificação do Paciente</label>
-                    <input type="text" id="patientName" required class="w-full p-4 bg-indigo-50 border-2 border-indigo-100 rounded-2xl text-lg font-bold outline-none focus:ring-4 focus:ring-yellow-400/50 transition-all uppercase" placeholder="NOME DO PACIENTE">
-                </div>
+    <!-- NAVEGAÇÃO INFERIOR FIXA -->
+    <nav class="bottom-nav">
+      <button class="nav-item active" data-target="sec-dashboard">
+        <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+        <span>Início</span>
+      </button>
+      <button class="nav-item" id="btn-nav-add-expense">
+        <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+        <span>Gasto</span>
+      </button>
+      <button class="nav-item" data-target="sec-calendar">
+        <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/></svg>
+        <span>Calendário</span>
+      </button>
+      <button class="nav-item" data-target="sec-reports">
+        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+        <span>Relatórios</span>
+      </button>
+      <button class="nav-item" data-target="sec-settings">
+        <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        <span>Ajustes</span>
+      </button>
+    </nav>
 
-                <div>
-                    <label class="block text-slate-500 font-bold text-[10px] mb-1 uppercase tracking-widest">Nome do Medicamento</label>
-                    <input type="text" id="name" required class="w-full p-4 bg-slate-100 rounded-2xl text-lg font-bold outline-none focus:ring-4 focus:ring-yellow-400/50 border-none transition-all uppercase" placeholder="EX: DIPIRONA">
-                </div>
-
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-slate-500 font-bold text-[10px] mb-1 uppercase tracking-widest">Data Início</label>
-                        <input type="date" id="startDate" required class="w-full p-4 bg-slate-100 rounded-2xl font-bold outline-none focus:ring-4 focus:ring-yellow-400/50 border-none transition-all">
-                    </div>
-                    <div>
-                        <label class="block text-slate-500 font-bold text-[10px] mb-1 uppercase tracking-widest">Dose (Ex: 1 comp)</label>
-                        <input type="text" id="dose" required class="w-full p-4 bg-slate-100 rounded-2xl font-bold outline-none" placeholder="1 comp.">
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-slate-500 font-bold text-[10px] mb-1 uppercase tracking-widest">Stock Inicial (Total)</label>
-                    <input type="number" id="stock" required min="1" class="w-full p-4 bg-slate-100 rounded-2xl text-lg font-bold outline-none" placeholder="10">
-                </div>
-
-                <div class="bg-slate-50 p-4 rounded-3xl border border-dashed border-slate-200 space-y-3">
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dados do Fornecedor Preferencial</p>
-                    <input type="text" id="vendorName" class="w-full p-3 bg-white rounded-xl text-sm font-bold outline-none" placeholder="NOME DO FORNECEDOR/FARMÁCIA">
-                    <input type="tel" id="vendorTel" class="w-full p-3 bg-white rounded-xl text-sm font-bold outline-none" placeholder="WHATSAPP (COM DDD)">
-                </div>
-
-                <div>
-                    <label class="block text-slate-500 font-bold text-[10px] mb-2 uppercase tracking-widest text-center">Frequência Diária</label>
-                    <div class="grid grid-cols-4 gap-2">
-                        <button type="button" onclick="setFrequency(1)" class="freq-btn border-2 border-slate-200 py-3 rounded-2xl font-black text-slate-400 bg-white" id="freq-1">1x</button>
-                        <button type="button" onclick="setFrequency(2)" class="freq-btn border-2 border-slate-200 py-3 rounded-2xl font-black text-slate-400 bg-white" id="freq-2">2x</button>
-                        <button type="button" onclick="setFrequency(3)" class="freq-btn border-2 border-slate-200 py-3 rounded-2xl font-black text-slate-400 bg-white" id="freq-3">3x</button>
-                        <button type="button" onclick="setFrequency(4)" class="freq-btn border-2 border-slate-200 py-3 rounded-2xl font-black text-slate-400 bg-white" id="freq-4">4x</button>
-                    </div>
-                </div>
-
-                <div id="time-inputs" class="space-y-3"></div>
-
-                <button type="submit" id="btn-submit" class="w-full bg-yellow-400 text-black font-black py-5 rounded-[1.5rem] text-xl shadow-lg active:bg-yellow-500 transition-all uppercase tracking-widest mt-2 flex items-center justify-center gap-3">
-                    GUARDAR TRATAMENTO
-                </button>
-            </form>
+    <!-- MODAL: NOVO GASTO -->
+    <div class="modal-overlay" id="modal-expense">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="modal-title">REGISTRAR GASTO</div>
+          <button class="btn-icon" id="btn-close-modal">✕</button>
         </div>
+
+        <!-- ÁREA DO LEITOR DE CÓDIGO DE BARRAS / QR CODE -->
+        <div class="scanner-box">
+          <button type="button" class="btn-scanner-toggle" id="btn-toggle-scanner">
+            <span>📷</span> Ler Código de Barras / QR Code
+          </button>
+          <div id="qr-reader" class="hidden"></div>
+          <div id="scanner-status" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px;" class="hidden">
+            Aponte a câmera para o QR Code (NFC-e / PIX) ou Código de Barras
+          </div>
+        </div>
+
+        <form id="form-add-expense">
+          <div class="form-group">
+            <label for="input-expense-amount">Valor (R$)</label>
+            <input type="text" id="input-expense-amount" class="form-control" placeholder="R$ 0,00" required>
+          </div>
+
+          <div class="form-group">
+            <label for="select-expense-category">Categoria</label>
+            <select id="select-expense-category" class="form-control" required>
+              <option value="Alimentação">🍔 Alimentação</option>
+              <option value="Mercado">🛒 Mercado</option>
+              <option value="Transporte">🚗 Transporte</option>
+              <option value="Moradia">🏠 Moradia</option>
+              <option value="Saúde">💊 Saúde</option>
+              <option value="Educação">📚 Educação</option>
+              <option value="Lazer">🎬 Lazer</option>
+              <option value="Compras">🛍️ Compras</option>
+              <option value="Contas">📄 Contas</option>
+              <option value="Outros">📦 Outros</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="input-expense-desc">Descrição</label>
+            <input type="text" id="input-expense-desc" class="form-control" placeholder="Ex: Almoço no restaurante">
+          </div>
+
+          <div class="form-group">
+            <label for="input-expense-date">Data</label>
+            <input type="date" id="input-expense-date" class="form-control" required>
+          </div>
+
+          <div class="btn-group">
+            <button type="button" class="btn btn-secondary" id="btn-cancel-expense">CANCELAR</button>
+            <button type="submit" class="btn btn-submit">REGISTRAR GASTO</button>
+          </div>
+        </form>
+      </div>
     </div>
 
-    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-8 py-4 rounded-full shadow-2xl opacity-0 transition-opacity z-[200] font-black pointer-events-none text-center text-sm uppercase"></div>
+    <!-- TOAST CONFIRMAÇÃO -->
+    <div class="toast" id="toast-message">
+      ✓ Gasto registrado!
+    </div>
 
-    <script>
-        const apiKey = "";
-        let meds = [];
-        const STORAGE_KEY = 'cimed_v14_images';
+  </div>
 
-        // --- Funções de API ---
+  <!-- JAVASCRIPT PRINCIPAL (MOTOR DA APLICAÇÃO) -->
+  <script>
+    /* ==========================================================================
+       ESTRUTURA DE DADOS E ESTADO DA APLICAÇÃO
+       ========================================================================== */
+    
+    // Chave no localStorage
+    const STORAGE_KEY = 'MEU_LIMITE_DIARIO_DATA_V1';
 
-        async function generateMedImage(medName) {
-            const prompt = `A clean, professional product photograph of a medicine box labeled "${medName}", pharmaceutical packaging, white background, high quality, studio lighting.`;
-            try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${apiKey}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        instances: [{ prompt: prompt }],
-                        parameters: { sampleCount: 1 }
-                    })
-                });
-                const result = await response.json();
-                return `data:image/png;base64,${result.predictions[0].bytesBase64Encoded}`;
-            } catch (error) {
-                console.error("Erro ao gerar imagem:", error);
-                return null;
-            }
+    // Estado inicial padrão
+    let appState = {
+      config: {
+        salaryCents: 0,
+        pctExpense: 80,
+        pctReserve: 20,
+        customLogoBase64: null,
+        theme: 'light'
+      },
+      expenses: [], // array de objetos: { id, date, amountCents, category, description, timestamp }
+      history: []   // meses encerrados salvos
+    };
+
+    // Ícones das categorias
+    const CATEGORY_ICONS = {
+      'Alimentação': '🍔',
+      'Mercado': '🛒',
+      'Transporte': '🚗',
+      'Moradia': '🏠',
+      'Saúde': '💊',
+      'Educação': '📚',
+      'Lazer': '🎬',
+      'Compras': '🛍️',
+      'Contas': '📄',
+      'Outros': '📦'
+    };
+
+    /* ==========================================================================
+       INICIALIZAÇÃO DA APLICAÇÃO
+       ========================================================================== */
+    window.addEventListener('DOMContentLoaded', () => {
+      loadStateFromStorage();
+      initUI();
+      renderAll();
+    });
+
+    function loadStateFromStorage() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          appState = JSON.parse(saved);
+        }
+      } catch (e) {
+        console.error('Erro ao carregar dados do LocalStorage:', e);
+      }
+    }
+
+    function saveStateToStorage() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+      } catch (e) {
+        console.error('Erro ao salvar no LocalStorage:', e);
+      }
+    }
+
+    /* ==========================================================================
+       UTILITÁRIOS FINANCEIROS E DATAS (PRECISÃO EM CENTAVOS)
+       ========================================================================== */
+    function formatCurrency(cents) {
+      const reais = cents / 100;
+      return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+      }).format(reais);
+    }
+
+    function parseCurrencyToCents(str) {
+      if (typeof str === 'number') return Math.round(str * 100);
+      const cleanStr = str.replace(/[^\d,]/g, '').replace(',', '.');
+      const val = parseFloat(cleanStr);
+      return isNaN(val) ? 0 : Math.round(val * 100);
+    }
+
+    function getDaysInMonth(year, monthZeroIndexed) {
+      return new Date(year, monthZeroIndexed + 1, 0).getDate();
+    }
+
+    function getFormattedTodayStr() {
+      const today = new Date();
+      return today.toISOString().split('T')[0];
+    }
+
+    /* ==========================================================================
+       NÚCLEO DA LÓGICA: MOTOR DE ACÚMULO DE SALDO
+       ========================================================================== */
+    function calculateDailyFinancials(targetDateStr = getFormattedTodayStr()) {
+      const [yearStr, monthStr, dayStr] = targetDateStr.split('-');
+      const targetYear = parseInt(yearStr);
+      const targetMonthZero = parseInt(monthStr) - 1;
+      const targetDay = parseInt(dayStr);
+
+      const daysInMonth = getDaysInMonth(targetYear, targetMonthZero);
+      
+      const totalBudgetMonthCents = Math.round((appState.config.salaryCents * appState.config.pctExpense) / 100);
+      const reserveMonthCents = Math.round((appState.config.salaryCents * appState.config.pctReserve) / 100);
+      
+      const baseDailyLimitCents = Math.round(totalBudgetMonthCents / daysInMonth);
+
+      // Calcular o acúmulo dia a dia do mês atual até o dia alvo
+      let accumulatedBalanceCents = 0;
+
+      for (let day = 1; day <= targetDay; day++) {
+        const dateStr = `${targetYear}-${String(targetMonthZero + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        
+        // Limite do dia é o limite base + saldo do dia anterior
+        const dayLimitCents = baseDailyLimitCents + accumulatedBalanceCents;
+
+        // Soma dos gastos do dia
+        const daySpentCents = appState.expenses
+          .filter(e => e.date === dateStr)
+          .reduce((acc, curr) => acc + curr.amountCents, 0);
+
+        // Saldo resultante do dia que acumula para o próximo
+        const dayBalanceCents = dayLimitCents - daySpentCents;
+
+        if (day === targetDay) {
+          return {
+            dateStr,
+            baseDailyLimitCents,
+            accumulatedBalanceBeforeTodayCents: accumulatedBalanceCents,
+            todayLimitCents: dayLimitCents,
+            todaySpentCents: daySpentCents,
+            todayRemainingCents: dayBalanceCents,
+            totalBudgetMonthCents,
+            reserveMonthCents,
+            daysInMonth
+          };
         }
 
-        function searchBestPrice(medName) {
-            const query = `preço ${medName} farmácia perto de mim`;
-            const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-            window.open(url, '_blank');
+        // Atualiza o saldo acumulado para o loop do dia seguinte
+        accumulatedBalanceCents = dayBalanceCents;
+      }
+    }
+
+    /* ==========================================================================
+       INTERFACE DE USUÁRIO & RENDERIZAÇÃO
+       ========================================================================== */
+    function initUI() {
+      // Data do topo
+      const now = new Date();
+      const options = { weekday: 'short', day: 'numeric', month: 'short' };
+      document.getElementById('current-date-display').textContent = now.toLocaleDateString('pt-BR', options);
+
+      // Tema
+      if (appState.config.theme === 'dark') {
+        document.body.setAttribute('data-theme', 'dark');
+        document.getElementById('toggle-theme-btn').textContent = '☀️';
+      }
+
+      // Máscaras Monetárias nos Inputs
+      setupCurrencyMask('input-salary');
+      setupCurrencyMask('input-expense-amount');
+      setupCurrencyMask('input-calc-check');
+      setupCurrencyMask('settings-salary');
+
+      // Form Onboarding
+      document.getElementById('form-onboarding').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const salaryVal = parseCurrencyToCents(document.getElementById('input-salary').value);
+        const pctExp = parseInt(document.getElementById('input-pct-expenses').value);
+        const pctRes = parseInt(document.getElementById('input-pct-reserve').value);
+
+        if (pctExp + pctRes !== 100) {
+          alert('A soma dos percentuais de Gastos e Reserva deve ser exatamente 100%!');
+          return;
         }
 
-        // --- Lógica da App ---
+        appState.config.salaryCents = salaryVal;
+        appState.config.pctExpense = pctExp;
+        appState.config.pctReserve = pctRes;
 
-        function init() {
-            try {
-                const data = localStorage.getItem(STORAGE_KEY);
-                meds = data ? JSON.parse(data) : [];
-                checkDailyReset();
-                render();
-            } catch (e) { meds = []; }
+        saveStateToStorage();
+        renderAll();
+      });
+
+      // Navegação Inferior
+      document.querySelectorAll('.nav-item').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (btn.id === 'btn-nav-add-expense') {
+            openExpenseModal();
+            return;
+          }
+
+          document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+
+          const targetSecId = btn.getAttribute('data-target');
+          document.querySelectorAll('main.content > section').forEach(sec => sec.classList.add('hidden'));
+          document.getElementById(targetSecId).classList.remove('hidden');
+
+          if (targetSecId === 'sec-calendar') renderCalendar();
+          if (targetSecId === 'sec-reports') renderReports();
+        });
+      });
+
+      // Modal
+      document.getElementById('btn-open-expense-modal').addEventListener('click', openExpenseModal);
+      document.getElementById('btn-close-modal').addEventListener('click', closeExpenseModal);
+      document.getElementById('btn-cancel-expense').addEventListener('click', closeExpenseModal);
+
+      // Form Registrar Gasto
+      document.getElementById('form-add-expense').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const amountCents = parseCurrencyToCents(document.getElementById('input-expense-amount').value);
+        const category = document.getElementById('select-expense-category').value;
+        const description = document.getElementById('input-expense-desc').value || category;
+        const date = document.getElementById('input-expense-date').value;
+
+        if (amountCents <= 0) {
+          alert('Informe um valor válido maior que zero.');
+          return;
         }
 
-        function saveAndRender() {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(meds));
-            render();
-        }
-
-        function getPeriodInfo(time) {
-            const hour = parseInt(time.split(':')[0]);
-            if (hour >= 5 && hour < 12) return { label: 'Manhã', class: 'tag-manha' };
-            if (hour >= 12 && hour < 18) return { label: 'Tarde', class: 'tag-tarde' };
-            if (hour >= 18 && hour < 24) return { label: 'Noite', class: 'tag-noite' };
-            return { label: 'Madrugada', class: 'tag-madrugada' };
-        }
-
-        function setFrequency(n) {
-            document.querySelectorAll('.freq-btn').forEach(btn => btn.classList.remove('active'));
-            document.getElementById(`freq-${n}`).classList.add('active');
-            const container = document.getElementById('time-inputs');
-            container.innerHTML = '';
-            for(let i = 1; i <= n; i++) {
-                container.innerHTML += `
-                    <div class="card-med">
-                        <label class="text-[9px] font-black text-slate-400 uppercase ml-1">Horário da Dose ${i}</label>
-                        <input type="time" required class="med-time w-full p-3 bg-slate-100 rounded-xl text-lg font-bold outline-none border-none">
-                    </div>`;
-            }
-        }
-
-        document.getElementById('form-medication').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const btn = document.getElementById('btn-submit');
-            const originalText = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = `<span class="animate-spin text-2xl">⏳</span> GERANDO CAIXA...`;
-
-            const medName = document.getElementById('name').value.toUpperCase();
-            const timeInputs = document.querySelectorAll('.med-time');
-            const groupId = "G_" + Date.now();
-            
-            // Gerar imagem da caixa
-            const imageUrl = await generateMedImage(medName);
-
-            const commonData = {
-                groupId: groupId,
-                patientName: document.getElementById('patientName').value.toUpperCase(),
-                name: medName,
-                dose: document.getElementById('dose').value,
-                stock: parseInt(document.getElementById('stock').value),
-                startDate: document.getElementById('startDate').value,
-                vendorName: document.getElementById('vendorName').value || 'CIMED',
-                vendorTel: document.getElementById('vendorTel').value || '',
-                boxImage: imageUrl,
-                takenToday: false
-            };
-            
-            timeInputs.forEach(input => {
-                meds.push({ ...commonData, id: "ID_" + Math.random().toString(36).substr(2, 9), time: input.value });
-            });
-
-            saveAndRender();
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-            closeModal();
-            showToast("✅ MEDICAMENTO REGISTADO!");
+        appState.expenses.push({
+          id: Date.now().toString(),
+          amountCents,
+          category,
+          description,
+          date,
+          timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
         });
 
-        function takeDose(id) {
-            const index = meds.findIndex(m => m.id === id);
-            if (index === -1) return;
-            const gId = meds[index].groupId;
-            meds.forEach(m => {
-                if (m.groupId === gId) {
-                    m.stock = Math.max(0, m.stock - 1);
-                    if (m.id === id) m.takenToday = true;
-                }
-            });
-            saveAndRender();
-            showToast(`💊 DOSE REGISTADA!`);
-        }
+        saveStateToStorage();
+        closeExpenseModal();
+        renderAll();
+        showToast('✓ Gasto registrado!');
+      });
 
-        function undoDose(id) {
-            if (confirm("Deseja desmarcar esta dose?")) {
-                const index = meds.findIndex(m => m.id === id);
-                if (index === -1) return;
-                const gId = meds[index].groupId;
-                meds.forEach(m => {
-                    if (m.groupId === gId) {
-                        m.stock += 1;
-                        if (m.id === id) m.takenToday = false;
-                    }
-                });
-                saveAndRender();
-                showToast(`↩️ DOSE CANCELADA!`);
-            }
-        }
-
-        function deleteGroup(gId) {
-            if (confirm("Remover este tratamento completo?")) {
-                meds = meds.filter(m => m.groupId !== gId);
-                saveAndRender();
-            }
-        }
-
-        function render() {
-            const container = document.getElementById('med-groups-container');
-            const alertArea = document.getElementById('stock-alerts');
-            const alertList = document.getElementById('low-stock-list');
-            container.innerHTML = ''; alertList.innerHTML = '';
-            const todayStr = new Date().toISOString().split('T')[0];
-
-            if (meds.length === 0) {
-                container.innerHTML = `<div class="text-center py-24 text-slate-300 font-black uppercase tracking-[0.2em] px-10 text-xs">Sem medicamentos ativos.</div>`;
-                alertArea.classList.add('hidden'); return;
-            }
-
-            // --- 1. Alertas de Reposição com FOTO ---
-            const seenGroups = new Set();
-            let hasLow = false;
-            meds.forEach(m => {
-                if (!seenGroups.has(m.groupId) && m.stock <= 5) {
-                    hasLow = true;
-                    
-                    alertList.innerHTML += `
-                        <div class="bg-white border-2 border-red-200 rounded-[2.5rem] shadow-sm overflow-hidden card-med">
-                            <div class="flex h-40 bg-slate-100">
-                                ${m.boxImage ? 
-                                    `<img src="${m.boxImage}" class="w-1/2 h-full object-cover" alt="Caixa do medicamento">` : 
-                                    `<div class="w-1/2 h-full flex items-center justify-center bg-slate-200 text-slate-400 font-black text-[10px] text-center p-4 uppercase">Foto da Caixa Indisponível</div>`
-                                }
-                                <div class="w-1/2 p-5 flex flex-col justify-center bg-red-50">
-                                    <span class="text-[8px] font-black text-red-400 uppercase tracking-widest mb-1">REPOR URGENTE</span>
-                                    <h4 class="font-black text-red-600 text-xl leading-none uppercase italic">${m.name}</h4>
-                                    <p class="text-[10px] font-bold text-red-800 mt-2">STOCK: ${m.stock} unidades</p>
-                                </div>
-                            </div>
-                            <div class="p-5 grid grid-cols-2 gap-3 bg-white">
-                                <button onclick="searchBestPrice('${m.name}')" class="flex items-center justify-center gap-2 bg-indigo-600 text-white font-black text-[9px] py-4 rounded-2xl uppercase tracking-tighter active:scale-95 transition-transform">
-                                    🔍 BUSCAR MENOR PREÇO
-                                </button>
-                                ${m.vendorTel ? `
-                                <a href="https://wa.me/${m.vendorTel.replace(/\D/g, '')}" target="_blank" class="flex items-center justify-center gap-2 bg-green-500 text-white font-black text-[9px] py-4 rounded-2xl uppercase tracking-tighter active:scale-95 transition-transform">
-                                    💬 WHATSAPP FARMÁCIA
-                                </a>` : `
-                                <div class="flex items-center justify-center text-[8px] text-slate-400 font-bold border-2 border-slate-100 rounded-2xl text-center">SEM CONTACTO GUARDADO</div>
-                                `}
-                            </div>
-                        </div>`;
-                }
-                seenGroups.add(m.groupId);
-            });
-            alertArea.classList.toggle('hidden', !hasLow);
-
-            // --- 2. Lista Principal ---
-            const grouped = meds.reduce((acc, med) => {
-                if (!acc[med.groupId]) acc[med.groupId] = { info: med, doses: [] };
-                acc[med.groupId].doses.push(med);
-                return acc;
-            }, {});
-
-            Object.values(grouped).forEach(group => {
-                const info = group.info;
-                if (info.startDate > todayStr) return;
-
-                const groupCard = document.createElement('div');
-                groupCard.className = "space-y-3 card-med";
-                groupCard.innerHTML = `
-                    <div class="med-group-header bg-slate-900 text-white p-5 rounded-[2.5rem] shadow-lg flex justify-between items-center">
-                        <div class="flex items-center gap-4">
-                            ${info.boxImage ? `<img src="${info.boxImage}" class="w-12 h-12 rounded-xl object-cover ring-2 ring-yellow-400" />` : ''}
-                            <div>
-                                <p class="text-[8px] font-black text-yellow-400 uppercase tracking-widest mb-1">${info.patientName}</p>
-                                <h3 class="text-xl font-black italic uppercase leading-none">${info.name}</h3>
-                                <p class="text-[9px] font-bold text-slate-400 uppercase mt-1">Dose: ${info.dose} • Stock: ${info.stock}</p>
-                            </div>
-                        </div>
-                        <button onclick="deleteGroup('${info.groupId}')" class="bg-white/10 p-3 rounded-full hover:bg-red-500/20 transition-colors">
-                            <svg width="18" height="18" fill="white" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-                        </button>
-                    </div>
-                    <div class="grid grid-cols-1 gap-2 pl-4" id="doses-for-${info.groupId}"></div>
-                `;
-
-                const doseContainer = groupCard.querySelector(`#doses-for-${info.groupId}`);
-                group.doses.sort((a,b) => a.time.localeCompare(b.time)).forEach(dose => {
-                    const p = getPeriodInfo(dose.time);
-                    const taken = dose.takenToday;
-                    
-                    const doseItem = document.createElement('div');
-                    doseItem.className = `flex items-center gap-4 bg-white p-4 rounded-[1.8rem] border-2 transition-all ${taken ? 'border-green-100 bg-green-50/20' : 'border-slate-100 shadow-sm'}`;
-                    
-                    doseItem.innerHTML = `
-                        <div class="flex-shrink-0 w-14 text-center">
-                            <p class="text-[10px] font-black text-slate-900">${dose.time}</p>
-                        </div>
-                        <div class="flex-1 h-6 border-l border-slate-100"></div>
-                        <div class="flex-shrink-0">
-                            ${taken ? 
-                                `<button onclick="undoDose('${dose.id}')" class="px-5 py-2 bg-green-500 text-white font-black text-[9px] rounded-xl border border-green-600 uppercase">TOMADA ✓</button>` :
-                                `<button onclick="takeDose('${dose.id}')" class="btn-confirm px-6 bg-yellow-400 text-black font-black text-[9px] rounded-xl shadow-sm uppercase active:scale-95">TOMAR AGORA</button>`
-                            }
-                        </div>
-                    `;
-                    doseContainer.appendChild(doseItem);
-                });
-
-                container.appendChild(groupCard);
-            });
-        }
-
-        function checkDailyReset() {
-            const today = new Date().toLocaleDateString();
-            if (localStorage.getItem('cimed_day_v14') !== today) {
-                meds.forEach(m => m.takenToday = false);
-                localStorage.setItem('cimed_day_v14', today);
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(meds));
-            }
-        }
-
-        function openModal() { 
-            document.getElementById('modal-form').classList.remove('hidden');
-            document.getElementById('startDate').value = new Date().toISOString().split('T')[0];
-            setFrequency(1);
-            document.body.style.overflow = 'hidden';
-        }
+      // Calculadora "Posso Gastar?"
+      document.getElementById('btn-run-calc').addEventListener('click', () => {
+        const valCents = parseCurrencyToCents(document.getElementById('input-calc-check').value);
+        const fin = calculateDailyFinancials();
+        const resultEl = document.getElementById('calc-result');
         
-        function closeModal() { document.getElementById('modal-form').classList.add('hidden'); document.body.style.overflow = 'auto'; }
-        
-        function showToast(msg) {
-            const t = document.getElementById('toast');
-            t.innerText = msg;
-            t.className = `fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-8 py-4 rounded-full shadow-2xl transition-opacity z-[200] font-black opacity-100 text-center text-[10px] uppercase`;
-            setTimeout(() => t.classList.replace('opacity-100', 'opacity-0'), 2500);
+        if (valCents <= 0) return;
+
+        resultEl.classList.remove('hidden');
+        if (valCents <= fin.todayRemainingCents) {
+          const sobra = fin.todayRemainingCents - valCents;
+          resultEl.style.background = 'var(--success-light)';
+          resultEl.style.color = 'var(--success)';
+          resultEl.innerHTML = `🟢 <strong>SIM, você pode gastar!</strong><br>Após essa compra ainda sobrarão ${formatCurrency(sobra)} hoje.`;
+        } else {
+          const excesso = valCents - fin.todayRemainingCents;
+          resultEl.style.background = 'var(--danger-light)';
+          resultEl.style.color = 'var(--danger)';
+          resultEl.innerHTML = `🔴 <strong>CUIDADO!</strong> esse gasto ultrapassará seu limite de hoje em ${formatCurrency(excesso)}.`;
+        }
+      });
+
+      // Modo Demonstração
+      document.getElementById('btn-load-demo').addEventListener('click', loadDemoData);
+
+      // Alternar Tema
+      document.getElementById('toggle-theme-btn').addEventListener('click', () => {
+        if (appState.config.theme === 'dark') {
+          appState.config.theme = 'light';
+          document.body.removeAttribute('data-theme');
+          document.getElementById('toggle-theme-btn').textContent = '🌙';
+        } else {
+          appState.config.theme = 'dark';
+          document.body.setAttribute('data-theme', 'dark');
+          document.getElementById('toggle-theme-btn').textContent = '☀️';
+        }
+        saveStateToStorage();
+      });
+
+      // Logo Personalizada
+      document.getElementById('input-logo-file').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = function(evt) {
+            appState.config.customLogoBase64 = evt.target.result;
+            saveStateToStorage();
+            applyLogo();
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+
+      document.getElementById('btn-remove-logo').addEventListener('click', () => {
+        appState.config.customLogoBase64 = null;
+        saveStateToStorage();
+        applyLogo();
+      });
+
+      // Backup Exportar/Importar
+      document.getElementById('btn-export-backup').addEventListener('click', () => {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appState, null, 2));
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.setAttribute("href", dataStr);
+        downloadAnchor.setAttribute("download", `meu_limite_diario_backup_${getFormattedTodayStr()}.json`);
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+      });
+
+      document.getElementById('btn-trigger-import').addEventListener('click', () => {
+        document.getElementById('input-import-backup').click();
+      });
+
+      document.getElementById('input-import-backup').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = function(evt) {
+            try {
+              const imported = JSON.parse(evt.target.result);
+              if (imported.config && imported.expenses) {
+                appState = imported;
+                saveStateToStorage();
+                renderAll();
+                alert('Backup restaurado com sucesso!');
+              }
+            } catch (err) {
+              alert('Arquivo de backup inválido.');
+            }
+          };
+          reader.readAsText(file);
+        }
+      });
+
+      // Resetar Dados
+      document.getElementById('btn-reset-data').addEventListener('click', () => {
+        if (confirm('Tem certeza que deseja apagar todos os seus dados? Esta ação não pode ser desfeita.')) {
+          localStorage.removeItem(STORAGE_KEY);
+          location.reload();
+        }
+      });
+
+      // Ajustes Form
+      document.getElementById('form-settings').addEventListener('submit', (e) => {
+        e.preventDefault();
+        appState.config.salaryCents = parseCurrencyToCents(document.getElementById('settings-salary').value);
+        appState.config.pctExpense = parseInt(document.getElementById('settings-pct-expense').value);
+        appState.config.pctReserve = parseInt(document.getElementById('settings-pct-reserve').value);
+        saveStateToStorage();
+        renderAll();
+        showToast('✓ Configurações salvas!');
+      });
+    }
+
+    function setupCurrencyMask(inputId) {
+      const el = document.getElementById(inputId);
+      el.addEventListener('input', (e) => {
+        let value = e.target.value.replace(/\D/g, '');
+        if (!value) {
+          e.target.value = '';
+          return;
+        }
+        const cents = parseInt(value, 10);
+        e.target.value = formatCurrency(cents);
+      });
+    }
+
+    function applyLogo() {
+      const defLogo = document.getElementById('app-default-logo');
+      const custLogo = document.getElementById('app-custom-logo');
+      if (appState.config.customLogoBase64) {
+        defLogo.classList.add('hidden');
+        custLogo.src = appState.config.customLogoBase64;
+        custLogo.classList.remove('hidden');
+      } else {
+        custLogo.classList.add('hidden');
+        defLogo.classList.remove('hidden');
+      }
+    }
+
+    function renderAll() {
+      applyLogo();
+
+      // Verificar se possui onboarding
+      if (!appState.config.salaryCents || appState.config.salaryCents <= 0) {
+        document.getElementById('sec-onboarding').classList.remove('hidden');
+        document.getElementById('sec-dashboard').classList.add('hidden');
+        return;
+      } else {
+        document.getElementById('sec-onboarding').classList.add('hidden');
+        document.getElementById('sec-dashboard').classList.remove('hidden');
+      }
+
+      // Renderizar Dashboard
+      const fin = calculateDailyFinancials();
+
+      document.getElementById('dash-today-limit').textContent = formatCurrency(fin.todayRemainingCents);
+      document.getElementById('dash-base-limit').textContent = formatCurrency(fin.baseDailyLimitCents);
+      document.getElementById('dash-accumulated-balance').textContent = formatCurrency(fin.accumulatedBalanceBeforeTodayCents);
+
+      document.getElementById('dash-today-spent-text').textContent = formatCurrency(fin.todaySpentCents);
+      
+      // Percentual Utilizado Hoje
+      let pctUsed = fin.todayLimitCents > 0 ? (fin.todaySpentCents / fin.todayLimitCents) * 100 : 0;
+      pctUsed = Math.min(Math.max(pctUsed, 0), 100);
+
+      const fillEl = document.getElementById('dash-progress-fill');
+      fillEl.style.width = `${pctUsed}%`;
+      fillEl.className = 'progress-bar-fill';
+
+      const badgeEl = document.getElementById('dash-status-badge');
+      const msgEl = document.getElementById('dash-status-message');
+
+      if (pctUsed < 70) {
+        badgeEl.className = 'status-badge success';
+        badgeEl.textContent = '🟢 DENTRO DO LIMITE';
+        msgEl.textContent = 'Muito bem! Você está controlando seus gastos.';
+      } else if (pctUsed <= 100) {
+        fillEl.classList.add('warning');
+        badgeEl.className = 'status-badge warning';
+        badgeEl.textContent = '🟡 ATENÇÃO';
+        msgEl.textContent = 'Atenção: você já utilizou grande parte do limite de hoje.';
+      } else {
+        fillEl.classList.add('danger');
+        badgeEl.className = 'status-badge danger';
+        badgeEl.textContent = '🔴 LIMITE ULTRAPASSADO';
+        msgEl.textContent = 'Você ultrapassou seu limite. O excesso será descontado nos próximos dias.';
+      }
+
+      document.getElementById('dash-progress-pct').textContent = `${pctUsed.toFixed(1)}% utilizado`;
+      document.getElementById('dash-remaining-today').textContent = `Restante: ${formatCurrency(fin.todayRemainingCents)}`;
+
+      // Totais Mês
+      const todayStr = getFormattedTodayStr();
+      const currentMonthPrefix = todayStr.substring(0, 7);
+      const totalMonthSpentCents = appState.expenses
+        .filter(e => e.date.startsWith(currentMonthPrefix))
+        .reduce((a, c) => a + c.amountCents, 0);
+
+      document.getElementById('dash-month-budget').textContent = formatCurrency(fin.totalBudgetMonthCents);
+      document.getElementById('dash-month-spent').textContent = formatCurrency(totalMonthSpentCents);
+      document.getElementById('dash-reserve-amount').textContent = formatCurrency(fin.reserveMonthCents);
+
+      // Renderizar Lista de Gastos do Dia
+      renderTodayExpensesList(todayStr);
+
+      // Preencher Inputs de Configuração
+      document.getElementById('settings-salary').value = formatCurrency(appState.config.salaryCents);
+      document.getElementById('settings-pct-expense').value = appState.config.pctExpense;
+      document.getElementById('settings-pct-reserve').value = appState.config.pctReserve;
+    }
+
+    function renderTodayExpensesList(todayStr) {
+      const container = document.getElementById('dash-expense-list');
+      container.innerHTML = '';
+
+      const todayExpenses = appState.expenses.filter(e => e.date === todayStr);
+      document.getElementById('today-expense-count').textContent = `${todayExpenses.length} lançamentos`;
+
+      if (todayExpenses.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding: 20px; color: var(--text-muted); font-size: 0.85rem;">Nenhum gasto registrado hoje.</div>`;
+        return;
+      }
+
+      todayExpenses.reverse().forEach(exp => {
+        const item = document.createElement('div');
+        item.className = 'expense-item';
+        item.innerHTML = `
+          <div class="expense-info">
+            <div class="expense-icon">${CATEGORY_ICONS[exp.category] || '📦'}</div>
+            <div class="expense-details">
+              <div class="title">${exp.description}</div>
+              <div class="subtitle">${exp.category} • ${exp.timestamp || ''}</div>
+            </div>
+          </div>
+          <div class="expense-value">
+            -${formatCurrency(exp.amountCents)}
+            <button class="btn-delete-expense" onclick="deleteExpense('${exp.id}')">✕</button>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    function deleteExpense(id) {
+      appState.expenses = appState.expenses.filter(e => e.id !== id);
+      saveStateToStorage();
+      renderAll();
+      showToast('Gasto removido');
+    }
+
+    /* ==========================================================================
+       MODAIS E TOASTS
+       ========================================================================== */
+    function openExpenseModal() {
+      document.getElementById('input-expense-date').value = getFormattedTodayStr();
+      document.getElementById('modal-expense').classList.add('active');
+    }
+
+    function closeExpenseModal() {
+      stopScanner();
+      document.getElementById('modal-expense').classList.remove('active');
+      document.getElementById('form-add-expense').reset();
+    }
+
+    /* ==========================================================================
+       LEITOR DE CÓDIGO DE BARRAS E QR CODE (PARSER AUTOMÁTICO)
+       ========================================================================== */
+    let html5QrCode = null;
+    let isScannerRunning = false;
+
+    document.getElementById('btn-toggle-scanner').addEventListener('click', () => {
+      if (isScannerRunning) {
+        stopScanner();
+      } else {
+        startScanner();
+      }
+    });
+
+    function startScanner() {
+      const readerEl = document.getElementById('qr-reader');
+      const statusEl = document.getElementById('scanner-status');
+      const btnEl = document.getElementById('btn-toggle-scanner');
+
+      if (typeof Html5Qrcode === 'undefined') {
+        showToast('⚠️ Biblioteca do leitor ainda carregando...');
+        return;
+      }
+
+      readerEl.classList.remove('hidden');
+      statusEl.classList.remove('hidden');
+      statusEl.textContent = 'Iniciando câmera...';
+      btnEl.innerHTML = '<span>⏹️</span> Parar Leitor';
+
+      html5QrCode = new Html5Qrcode("qr-reader");
+      
+      const config = {
+        fps: 10,
+        qrbox: { width: 240, height: 150 },
+        aspectRatio: 1.5
+      };
+
+      html5QrCode.start(
+        { facingMode: "environment" },
+        config,
+        (decodedText) => {
+          // Sucesso na leitura
+          handleScannedCode(decodedText);
+          stopScanner();
+        },
+        (errorMessage) => {
+          // Ignorar erros contínuos de busca de frame
+        }
+      ).then(() => {
+        isScannerRunning = true;
+        statusEl.textContent = 'Aponte a câmera para o código de barras ou QR Code';
+      }).catch((err) => {
+        console.error('Erro ao abrir câmera:', err);
+        statusEl.textContent = 'Não foi possível acessar a câmera. Verifique as permissões.';
+        btnEl.innerHTML = '<span>📷</span> Ler Código de Barras / QR Code';
+        isScannerRunning = false;
+      });
+    }
+
+    function stopScanner() {
+      const readerEl = document.getElementById('qr-reader');
+      const statusEl = document.getElementById('scanner-status');
+      const btnEl = document.getElementById('btn-toggle-scanner');
+
+      if (html5QrCode && isScannerRunning) {
+        html5QrCode.stop().then(() => {
+          html5QrCode.clear();
+        }).catch(err => console.error(err));
+      }
+
+      isScannerRunning = false;
+      readerEl.classList.add('hidden');
+      statusEl.classList.add('hidden');
+      btnEl.innerHTML = '<span>📷</span> Ler Código de Barras / QR Code';
+    }
+
+    function handleScannedCode(code) {
+      let extractedAmountCents = 0;
+      let extractedDesc = '';
+      let detectedCategory = null;
+
+      // 1. Verificar se é QR Code de Nota Fiscal (NFC-e / URL SEFAZ)
+      if (code.includes('http') && (code.includes('nfce') || code.includes('fazenda') || code.includes('sefaz') || code.includes('p='))) {
+        extractedDesc = 'Compra via NFC-e (Cupom Fiscal)';
+        detectedCategory = 'Mercado';
+        // Tenta extrair valor se estiver embutido na query string (padrão de alguns estados)
+        const valMatch = code.match(/[?&|](?:vNF|valor|v)=([\d.,]+)/i);
+        if (valMatch && valMatch[1]) {
+          extractedAmountCents = parseCurrencyToCents(valMatch[1].replace('.', ','));
+        }
+      }
+      // 2. Verificar se é QR Code PIX (EMVCo BR Code)
+      else if (code.startsWith('000201')) {
+        // Campo 54 no padrão EMV PIX representa o valor da transação (ex: 540515.50)
+        const pixAmountMatch = code.match(/54(\d{2})(\d+\.\d{2})/);
+        if (pixAmountMatch) {
+          const len = parseInt(pixAmountMatch[1], 10);
+          const valStr = pixAmountMatch[2].substring(0, len);
+          extractedAmountCents = Math.round(parseFloat(valStr) * 100);
+        }
+        // Campo 59 representa o nome do recebedor (Merchant Name)
+        const pixMerchantMatch = code.match(/59(\d{2})([^\d]{2,25})/);
+        if (pixMerchantMatch) {
+          const len = parseInt(pixMerchantMatch[1], 10);
+          extractedDesc = 'PIX: ' + code.substring(code.indexOf(pixMerchantMatch[0]) + 4, code.indexOf(pixMerchantMatch[0]) + 4 + len).trim();
+        } else {
+          extractedDesc = 'Pagamento via QR Code PIX';
+        }
+      }
+      // 3. Verificar se é Código de Barras de Boleto Bancário (44 dígitos)
+      else if (/^\d{44}$/.test(code)) {
+        // Posições 10 a 19 (índice 9 a 19) contêm o valor em centavos no padrão FEBRABAN
+        const boletoValStr = code.substring(9, 19);
+        const valCents = parseInt(boletoValStr, 10);
+        if (!isNaN(valCents) && valCents > 0) {
+          extractedAmountCents = valCents;
+        }
+        extractedDesc = 'Boleto Bancário';
+        detectedCategory = 'Contas';
+      }
+      // 4. Código de Barras de Produto (EAN-13 / EAN-8 / UPC) ou Texto Genérico
+      else if (/^\d{8,14}$/.test(code)) {
+        extractedDesc = `Produto Cód. ${code}`;
+        // Consulta rápida offline/online opcional via OpenFoodFacts caso haja internet
+        fetchProductInfo(code);
+      }
+      // 5. QR Code com texto livre ou JSON (ex: {"valor": 25.50, "descricao": "Café"})
+      else {
+        try {
+          const jsonObj = JSON.parse(code);
+          if (jsonObj.valor || jsonObj.amount) {
+            extractedAmountCents = parseCurrencyToCents(String(jsonObj.valor || jsonObj.amount));
+          }
+          if (jsonObj.descricao || jsonObj.description || jsonObj.nome) {
+            extractedDesc = jsonObj.descricao || jsonObj.description || jsonObj.nome;
+          }
+        } catch (e) {
+          // Texto simples: tenta achar um valor numérico (R$ XX,XX) e usa o texto como descrição
+          const moneyMatch = code.match(/(?:R\$\s*)?(\d+[.,]\d{2})/);
+          if (moneyMatch) {
+            extractedAmountCents = parseCurrencyToCents(moneyMatch[1]);
+          }
+          extractedDesc = code.substring(0, 45);
+        }
+      }
+
+      // Preencher os campos do formulário automaticamente
+      if (extractedAmountCents > 0) {
+        document.getElementById('input-expense-amount').value = formatCurrency(extractedAmountCents);
+      }
+      if (extractedDesc) {
+        document.getElementById('input-expense-desc').value = extractedDesc;
+      }
+      if (detectedCategory) {
+        document.getElementById('select-expense-category').value = detectedCategory;
+      }
+
+      showToast('✓ Código lido com sucesso!');
+    }
+
+    // Busca nome do produto na base pública OpenFoodFacts se estiver online (fallback silencioso)
+    async function fetchProductInfo(barcode) {
+      if (!navigator.onLine) return;
+      try {
+        const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+        const data = await res.json();
+        if (data && data.status === 1 && data.product && data.product.product_name) {
+          const descInput = document.getElementById('input-expense-desc');
+          if (descInput.value.includes(barcode)) {
+            descInput.value = data.product.product_name;
+            document.getElementById('select-expense-category').value = 'Mercado';
+          }
+        }
+      } catch (e) {
+        // Mantém o código preenchido localmente caso falhe ou esteja offline
+      }
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast-message');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2500);
+    }
+
+    /* ==========================================================================
+       CALENDÁRIO MENSUAL
+       ========================================================================== */
+    let calendarCurrentDate = new Date();
+
+    function renderCalendar() {
+      const year = calendarCurrentDate.getFullYear();
+      const month = calendarCurrentDate.getMonth();
+
+      const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+      document.getElementById('calendar-month-year-title').textContent = `${monthNames[month]} ${year}`;
+
+      const firstDayIndex = new Date(year, month, 1).getDay();
+      const totalDays = getDaysInMonth(year, month);
+
+      const container = document.getElementById('calendar-days-container');
+      container.innerHTML = '';
+
+      // Células vazias
+      for (let i = 0; i < firstDayIndex; i++) {
+        const emptyCell = document.createElement('div');
+        emptyCell.className = 'calendar-day empty';
+        container.appendChild(emptyCell);
+      }
+
+      const todayStr = getFormattedTodayStr();
+
+      for (let day = 1; day <= totalDays; day++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const fin = calculateDailyFinancials(dateStr);
+
+        const dayEl = document.createElement('div');
+        dayEl.className = 'calendar-day';
+        dayEl.textContent = day;
+
+        if (dateStr === todayStr) dayEl.classList.add('today');
+
+        // Status visual do dia
+        if (fin.todaySpentCents > 0) {
+          if (fin.todayRemainingCents >= 0) {
+            dayEl.classList.add('saved');
+          } else {
+            dayEl.classList.add('exceeded');
+          }
         }
 
-        window.onload = init;
-    </script>
+        dayEl.addEventListener('click', () => {
+          document.getElementById('calendar-day-details').classList.remove('hidden');
+          document.getElementById('cal-detail-date').textContent = `Dia ${day} de ${monthNames[month]}`;
+          document.getElementById('cal-detail-limit').textContent = formatCurrency(fin.todayLimitCents);
+          document.getElementById('cal-detail-spent').textContent = formatCurrency(fin.todaySpentCents);
+          document.getElementById('cal-detail-balance').textContent = formatCurrency(fin.todayRemainingCents);
+        });
+
+        container.appendChild(dayEl);
+      }
+    }
+
+    document.getElementById('btn-prev-month').addEventListener('click', () => {
+      calendarCurrentDate.setMonth(calendarCurrentDate.getMonth() - 1);
+      renderCalendar();
+    });
+
+    document.getElementById('btn-next-month').addEventListener('click', () => {
+      calendarCurrentDate.setMonth(calendarCurrentDate.getMonth() + 1);
+      renderCalendar();
+    });
+
+    /* ==========================================================================
+       RELATÓRIOS E GRÁFICOS (CANVAS NATIVO SEM DEPENDÊNCIAS)
+       ========================================================================== */
+    function renderReports() {
+      const fin = calculateDailyFinancials();
+      const today = new Date();
+      const dayOfMonth = today.getDate();
+
+      // Previsão
+      const averageDailySpentCents = fin.todaySpentCents / dayOfMonth;
+      const projectedMonthSpentCents = averageDailySpentCents * fin.daysInMonth;
+      
+      const forecastEl = document.getElementById('report-forecast-text');
+      const paceEl = document.getElementById('report-pace-badge');
+
+      if (projectedMonthSpentCents <= fin.totalBudgetMonthCents) {
+        forecastEl.textContent = `Mantendo seu ritmo atual, você deverá terminar o mês com aproximadamente ${formatCurrency(fin.totalBudgetMonthCents - projectedMonthSpentCents)} disponíveis.`;
+        paceEl.className = 'status-badge success';
+        paceEl.textContent = '🟢 DENTRO DA META';
+      } else {
+        forecastEl.textContent = `Atenção: mantendo esse ritmo, você excederá seu orçamento em ${formatCurrency(projectedMonthSpentCents - fin.totalBudgetMonthCents)}.`;
+        paceEl.className = 'status-badge danger';
+        paceEl.textContent = '🔴 RITMO ELEVADO';
+      }
+
+      renderCategoryChart();
+      renderBalanceChart();
+    }
+
+    function renderCategoryChart() {
+      const canvas = document.getElementById('chart-categories');
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Agrupar gastos por categoria
+      const categories = {};
+      appState.expenses.forEach(e => {
+        categories[e.category] = (categories[e.category] || 0) + e.amountCents;
+      });
+
+      const labels = Object.keys(categories);
+      const values = Object.values(categories);
+      const total = values.reduce((a, b) => a + b, 0);
+
+      const colors = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#64748b'];
+
+      // Desenhar Donut Chart
+      let startAngle = 0;
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      const radius = Math.min(centerX, centerY) - 10;
+
+      if (total === 0) {
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Sem gastos registrados', centerX, centerY);
+        return;
+      }
+
+      values.forEach((val, i) => {
+        const sliceAngle = (val / total) * 2 * Math.PI;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, startAngle, startAngle + sliceAngle);
+        ctx.arc(centerX, centerY, radius * 0.5, startAngle + sliceAngle, startAngle, true);
+        ctx.closePath();
+        ctx.fillStyle = colors[i % colors.length];
+        ctx.fill();
+        startAngle += sliceAngle;
+      });
+
+      // Legend
+      const legendEl = document.getElementById('category-legend');
+      legendEl.innerHTML = '';
+      labels.forEach((lbl, i) => {
+        legendEl.innerHTML += `
+          <div style="display:flex; align-items:center; gap:4px;">
+            <span style="width:10px; height:10px; background:${colors[i % colors.length]}; border-radius:2px;"></span>
+            ${lbl}: ${formatCurrency(values[i])}
+          </div>
+        `;
+      });
+    }
+
+    function renderBalanceChart() {
+      const canvas = document.getElementById('chart-balance-evolution');
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const today = new Date();
+      const currentDay = today.getDate();
+      const year = today.getFullYear();
+      const month = today.getMonth();
+
+      const balances = [];
+      for (let d = 1; d <= currentDay; d++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const fin = calculateDailyFinancials(dateStr);
+        balances.push(fin.todayRemainingCents / 100);
+      }
+
+      if (balances.length < 2) return;
+
+      const maxVal = Math.max(...balances, 100);
+      const minVal = Math.min(...balances, -100);
+
+      const padding = 20;
+      const width = canvas.width - padding * 2;
+      const height = canvas.height - padding * 2;
+
+      ctx.beginPath();
+      ctx.strokeStyle = '#4f46e5';
+      ctx.lineWidth = 3;
+
+      balances.forEach((val, i) => {
+        const x = padding + (i / (balances.length - 1)) * width;
+        const normalizedY = (val - minVal) / (maxVal - minVal || 1);
+        const y = canvas.height - padding - normalizedY * height;
+
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+
+      ctx.stroke();
+    }
+
+    /* ==========================================================================
+       DADOS DE DEMONSTRAÇÃO
+       ========================================================================== */
+    function loadDemoData() {
+      appState.config.salaryCents = 500000; // R$ 5.000,00
+      appState.config.pctExpense = 80;
+      appState.config.pctReserve = 20;
+
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+
+      appState.expenses = [
+        {
+          id: 'demo-1',
+          amountCents: 3500,
+          category: 'Alimentação',
+          description: 'Almoço Executivo',
+          date: `${year}-${month}-01`,
+          timestamp: '12:30'
+        },
+        {
+          id: 'demo-2',
+          amountCents: 8000,
+          category: 'Mercado',
+          description: 'Compras Semanais',
+          date: `${year}-${month}-02`,
+          timestamp: '16:00'
+        },
+        {
+          id: 'demo-3',
+          amountCents: 5000,
+          category: 'Transporte',
+          description: 'Combustível',
+          date: `${year}-${month}-03`,
+          timestamp: '09:15'
+        }
+      ];
+
+      saveStateToStorage();
+      renderAll();
+      showToast('Modo Demonstração Ativado!');
+    }
+  </script>
 </body>
 </html>
